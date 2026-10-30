@@ -11,10 +11,72 @@ import { MicrostructurePanel } from './components/MicrostructurePanel'
 import { CalibrationPanel } from './components/CalibrationPanel'
 import { WeatherPanel } from './components/WeatherPanel'
 import { EdgeDistribution } from './components/EdgeDistribution'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { formatCountdown } from './utils'
-import type { BtcWindow } from './types'
+import type { BtcWindow, WeatherForecast, WeatherSignal } from './types'
 
 const GlobeView = lazy(() => import('./components/GlobeView').then(m => ({ default: m.GlobeView })))
+
+function CityRadarFallback({ forecasts, signals }: { forecasts: WeatherForecast[]; signals: WeatherSignal[] }) {
+  const CITIES = [
+    { key: 'nyc', name: 'New York (Central Park)', code: 'NYC' },
+    { key: 'chicago', name: "Chicago (O'Hare)", code: 'CHI' },
+    { key: 'miami', name: 'Miami (MIA)', code: 'MIA' },
+    { key: 'los_angeles', name: 'Los Angeles (LAX)', code: 'LA' },
+    { key: 'denver', name: 'Denver (DEN)', code: 'DEN' },
+    { key: 'austin', name: 'Austin (Bergstrom)', code: 'AUS' },
+    { key: 'houston', name: 'Houston (Bush)', code: 'HOU' },
+  ]
+
+  return (
+    <div className="w-full h-full bg-neutral-950 p-4 flex flex-col justify-between overflow-y-auto">
+      <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
+        <span className="text-[11px] font-bold tracking-widest text-neutral-400 uppercase">
+          Station Radar [Hardware Fallback Mode]
+        </span>
+        <span className="text-[9px] text-cyan-400 bg-cyan-950/40 border border-cyan-800/40 px-1.5 py-0.5 uppercase">
+          7 Stations Active
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 my-auto py-2">
+        {CITIES.map(c => {
+          const fc = forecasts.find(f => f.city_key === c.key)
+          const citySignals = signals.filter(s => s.city_key === c.key)
+          const best = citySignals.length > 0 ? citySignals.reduce((a, b) => Math.abs(a.edge) > Math.abs(b.edge) ? a : b) : null
+          const actionable = citySignals.some(s => s.actionable)
+
+          return (
+            <div key={c.key} className={`p-2 border ${actionable ? 'border-green-500/40 bg-green-950/10' : 'border-neutral-800 bg-neutral-900/40'}`}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[11px] font-bold text-neutral-200">{c.code}</span>
+                {actionable ? (
+                  <span className="text-[8px] font-bold text-green-400 bg-green-950/60 border border-green-500/40 px-1">EDGE</span>
+                ) : (
+                  <span className="text-[8px] text-neutral-500">IDLE</span>
+                )}
+              </div>
+              <div className="text-base font-bold tabular-nums text-neutral-100">
+                {fc?.mean_high !== undefined ? `${fc.mean_high.toFixed(0)}°F` : '—'}
+              </div>
+              <div className="text-[9px] text-neutral-500 truncate mt-0.5">{c.name}</div>
+              {best && (
+                <div className="text-[9px] text-amber-400 mt-1 tabular-nums truncate">
+                  {best.direction} {best.threshold_f}°F ({(best.edge * 100).toFixed(1)}%)
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="text-[9px] text-neutral-600 flex items-center justify-between border-t border-neutral-900 pt-1">
+        <span>WebGL 3D globe bypassed &mdash; quant terminal operating normally</span>
+        <span>Open-Meteo + Kalshi Feed</span>
+      </div>
+    </div>
+  )
+}
 
 function LiveClock() {
   const [time, setTime] = useState(new Date())
@@ -270,13 +332,15 @@ function App() {
           {/* Globe - top 60% */}
           <div className="relative" style={{ height: '58%' }}>
             <div className="absolute inset-0">
-              <Suspense fallback={
-                <div className="w-full h-full flex items-center justify-center bg-black">
-                  <span className="text-[10px] text-neutral-600 uppercase tracking-wider">Loading Globe...</span>
-                </div>
-              }>
-                <GlobeView forecasts={weatherForecasts} signals={weatherSignals} />
-              </Suspense>
+              <ErrorBoundary fallback={() => <CityRadarFallback forecasts={weatherForecasts} signals={weatherSignals} />}>
+                <Suspense fallback={
+                  <div className="w-full h-full flex items-center justify-center bg-black">
+                    <span className="text-[10px] text-neutral-600 uppercase tracking-wider">Loading Globe...</span>
+                  </div>
+                }>
+                  <GlobeView forecasts={weatherForecasts} signals={weatherSignals} />
+                </Suspense>
+              </ErrorBoundary>
             </div>
             {/* Globe overlay: actionable count */}
             <div className="absolute top-2 left-2 z-10">
