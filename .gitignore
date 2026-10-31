@@ -47,9 +47,17 @@ frontend/build/
 *.log
 logs/
 
+# Keys & Secrets
+*.key
+*.pem
+kalshi*.key
+
 # Cache
 .cache/
 *.cache
+graphify-out/cache/
+graphify-out/.graphify_*
+graphify-out/20*/
 
 # Test
 .coverage

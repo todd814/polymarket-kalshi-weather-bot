@@ -47,10 +47,23 @@ export function StatsCards({ stats }: Props) {
       <div className="w-px h-3 bg-neutral-800" />
 
       <motion.div className="flex items-center gap-1.5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }}>
-        <span className="text-[10px] text-neutral-600 uppercase">Trades</span>
+        <span className="text-[10px] text-neutral-600 uppercase">Live</span>
         <span className="text-sm font-semibold tabular-nums text-neutral-100">{stats.total_trades}</span>
         {stats.is_running && <div className="live-dot" />}
       </motion.div>
+
+      {Boolean(stats.paper_trades && stats.paper_trades > 0) && (
+        <>
+          <div className="w-px h-3 bg-neutral-800" />
+          <motion.div className="flex items-center gap-1.5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
+            <span className="text-[10px] text-amber-500/70 uppercase">Paper</span>
+            <span className="text-sm font-semibold tabular-nums text-amber-400">{stats.paper_trades}</span>
+            <span className="text-[10px] text-neutral-500 tabular-nums">
+              ({(stats.paper_win_rate ? stats.paper_win_rate * 100 : 0).toFixed(0)}% W)
+            </span>
+          </motion.div>
+        </>
+      )}
     </div>
   )
 }

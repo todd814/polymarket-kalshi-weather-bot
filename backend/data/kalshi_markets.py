@@ -4,6 +4,7 @@ import re
 from datetime import date, datetime
 from typing import Dict, List, Optional
 
+from backend.config import settings
 from backend.data.kalshi_client import KalshiClient, kalshi_credentials_present
 from backend.data.weather_markets import WeatherMarket
 
@@ -16,6 +17,8 @@ CITY_SERIES: Dict[str, str] = {
     "miami": "KXHIGHMIA",
     "los_angeles": "KXHIGHLAX",
     "denver": "KXHIGHDEN",
+    "austin": "KXHIGHAUS",
+    "houston": "KXHIGHTHOU",
 }
 
 CITY_NAMES: Dict[str, str] = {
@@ -24,6 +27,8 @@ CITY_NAMES: Dict[str, str] = {
     "miami": "Miami",
     "los_angeles": "Los Angeles",
     "denver": "Denver",
+    "austin": "Austin",
+    "houston": "Houston",
 }
 
 # Month abbreviation mapping for ticker parsing
@@ -33,18 +38,19 @@ MONTH_ABBR = {
 }
 
 
-def _parse_kalshi_ticker(ticker: str, city_key: str) -> Optional[dict]:
+def _parse_kalshi_market(m: dict, city_key: str) -> Optional[dict]:
     """
-    Parse a Kalshi bracket ticker into market parameters.
-
-    Format: KXHIGHNY-26MAR01-B45.5
-      - 26MAR01 = 2026-03-01
-      - B45.5 = bracket boundary at 45.5°F (above)
-      - T45.5 would be "at or below" (top boundary)
+    Parse a Kalshi weather market using native API fields (strike_type, floor_strike, cap_strike).
+    Accurately distinguishes:
+      - 'greater' (upper tail: > floor_strike) -> direction: 'above'
+      - 'greater_or_equal' (inclusive upper tail: >= floor_strike, i.e. > floor_strike - 1) -> direction: 'above'
+      - 'less' (lower tail: < cap_strike) -> direction: 'below'
+      - 'less_or_equal' (inclusive lower tail: <= cap_strike, i.e. < cap_strike + 1) -> direction: 'below'
+      - 'between' (bracket bin: floor <= T <= cap) -> direction: 'between'
     """
-    # Match: SERIES-YYMONDD-B/Tnn.n
+    ticker = m.get("ticker", "")
     match = re.match(
-        r'^[A-Z]+-(\d{2})([A-Z]{3})(\d{2})-([BT])([\d.]+)$',
+        r'^[A-Z]+-(\d{2})([A-Z]{3})(\d{2})-([BT])(-?[\d.]+)$',
         ticker,
     )
     if not match:
@@ -53,8 +59,6 @@ def _parse_kalshi_ticker(ticker: str, city_key: str) -> Optional[dict]:
     yy = int(match.group(1))
     mon_str = match.group(2)
     dd = int(match.group(3))
-    boundary_type = match.group(4)
-    threshold = float(match.group(5))
 
     month = MONTH_ABBR.get(mon_str)
     if not month:
@@ -66,15 +70,62 @@ def _parse_kalshi_ticker(ticker: str, city_key: str) -> Optional[dict]:
     except ValueError:
         return None
 
-    # B = bottom boundary → "above" threshold; T = top boundary → "below" threshold
-    direction = "above" if boundary_type == "B" else "below"
+    strike_type = (m.get("strike_type") or "").lower()
+    floor = m.get("floor_strike")
+    cap = m.get("cap_strike")
+
+    if strike_type == "greater":
+        direction = "above"
+        threshold_f = float(floor if floor is not None else match.group(5))
+        cap_f = None
+    elif strike_type == "greater_or_equal":
+        direction = "above"
+        threshold_f = float(floor if floor is not None else match.group(5)) - 1.0
+        cap_f = None
+    elif strike_type == "less":
+        direction = "below"
+        threshold_f = float(cap if cap is not None else match.group(5))
+        cap_f = None
+    elif strike_type == "less_or_equal":
+        direction = "below"
+        threshold_f = float(cap if cap is not None else match.group(5)) + 1.0
+        cap_f = None
+    elif strike_type == "between":
+        direction = "between"
+        threshold_f = float(floor if floor is not None else float(match.group(5)) - 0.5)
+        cap_f = float(cap if cap is not None else float(match.group(5)) + 0.5)
+    else:
+        # Fallback for unclassified boundary types
+        b_type = match.group(4)
+        direction = "between" if b_type == "B" else "above"
+        threshold_f = float(match.group(5))
+        cap_f = None
 
     return {
         "target_date": target_date,
-        "threshold_f": threshold,
+        "threshold_f": threshold_f,
+        "cap_f": cap_f,
+        "strike_type": strike_type,
         "metric": "high",
         "direction": direction,
     }
+
+
+def _extract_price(m: dict, key_cents: str, key_dollars: str) -> Optional[float]:
+    """Extract price in dollars supporting both legacy cents and updated _dollars string formats."""
+    val = m.get(key_dollars)
+    if val is not None:
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            pass
+    val = m.get(key_cents)
+    if val is not None:
+        try:
+            return float(val) / 100.0
+        except (ValueError, TypeError):
+            pass
+    return None
 
 
 async def fetch_kalshi_weather_markets(
@@ -85,8 +136,9 @@ async def fetch_kalshi_weather_markets(
 
     Queries the KXHIGH{city} series for each configured city,
     handles cursor-based pagination, and returns WeatherMarket objects.
+    Works for both demo and production Kalshi APIs.
     """
-    if not kalshi_credentials_present():
+    if not settings.KALSHI_ENABLED:
         return []
 
     client = KalshiClient()
@@ -118,27 +170,46 @@ async def fetch_kalshi_weather_markets(
 
                 for m in raw_markets:
                     ticker = m.get("ticker", "")
-                    parsed = _parse_kalshi_ticker(ticker, city_key)
+                    parsed = _parse_kalshi_market(m, city_key)
                     if not parsed:
                         continue
 
                     if parsed["target_date"] < today:
                         continue
 
-                    yes_price = (m.get("yes_ask") or 0) / 100.0
-                    no_price = (m.get("no_ask") or 0) / 100.0
+                    yes_price = _extract_price(m, "yes_ask", "yes_ask_dollars") or 0.0
+                    no_price = _extract_price(m, "no_ask", "no_ask_dollars") or 0.0
+                    last_price = (
+                        _extract_price(m, "last_price", "last_price_dollars")
+                        or _extract_price(m, "previous_price", "previous_price_dollars")
+                        or 0.0
+                    )
 
-                    # Fallback to last/mid prices
-                    if yes_price <= 0:
-                        yes_price = (m.get("last_price") or 50) / 100.0
-                    if no_price <= 0:
-                        no_price = 1.0 - yes_price
+                    # Kalshi V2 empty-book convention: an empty bid side (0.0000) produces
+                    # a complementary ask of 1.0000. If ask fields are present in the payload
+                    # and BOTH sides of the book lack liquid asks in [0.02, 0.98], skip the
+                    # market (zero resting liquidity for IOC execution). Only fall back to
+                    # last_price if ask fields were completely omitted from `m`.
+                    has_ask_fields = any(
+                        m.get(k) is not None
+                        for k in ("yes_ask", "yes_ask_dollars", "no_ask", "no_ask_dollars")
+                    )
+                    yes_liquid = 0.02 <= yes_price <= 0.98
+                    no_liquid = 0.02 <= no_price <= 0.98
 
-                    # Skip fully resolved or illiquid
-                    if yes_price > 0.98 or yes_price < 0.02:
-                        continue
+                    if not yes_liquid and not no_liquid:
+                        if not has_ask_fields and 0.02 <= last_price <= 0.98:
+                            yes_price = last_price
+                            no_price = round(1.0 - yes_price, 4)
+                        else:
+                            continue
+                    else:
+                        if yes_price <= 0:
+                            yes_price = 1.0
+                        if no_price <= 0:
+                            no_price = 1.0
 
-                    volume = float(m.get("volume", 0) or 0)
+                    volume = float(m.get("volume_fp") or m.get("volume") or 0.0)
 
                     markets.append(WeatherMarket(
                         slug=ticker,
@@ -154,6 +225,8 @@ async def fetch_kalshi_weather_markets(
                         yes_price=yes_price,
                         no_price=no_price,
                         volume=volume,
+                        cap_f=parsed.get("cap_f"),
+                        strike_type=parsed.get("strike_type"),
                     ))
 
                 # Handle pagination

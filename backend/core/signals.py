@@ -9,6 +9,9 @@ from backend.config import settings
 from backend.data.btc_markets import BtcMarket, fetch_active_btc_markets
 from backend.data.crypto import fetch_crypto_price, compute_btc_microstructure
 from backend.models.database import SessionLocal, Signal
+from backend.analytics.calibration import calibration_harness
+from backend.analytics.microstructure import MicrostructureEngine
+from backend.analytics.risk_governor import omni_risk_governor
 
 logger = logging.getLogger("trading_bot")
 
@@ -76,32 +79,36 @@ def calculate_kelly_size(
     probability: float,
     market_price: float,
     direction: str,
-    bankroll: float
+    bankroll: float,
+    actual_entry_price: Optional[float] = None
 ) -> float:
     """
-    Calculate position size using fractional Kelly criterion.
+    Calculate position size using fractional Kelly criterion for binary options.
 
-    Kelly formula: f = (p * b - q) / b
+    Formula: f* = (win_prob - price) / (1 - price)
     where:
-        f = fraction of bankroll to bet
-        p = probability of winning
-        q = probability of losing (1 - p)
-        b = odds (payout ratio)
+        f* = optimal fraction of bankroll to wager
+        win_prob = model's estimated win probability
+        price = actual ask price paid (incorporating spread)
     """
-    if direction == "up":
+    if direction in ("up", "yes"):
         win_prob = probability
-        price = market_price
+        price = actual_entry_price if actual_entry_price is not None else market_price
     else:
-        win_prob = 1 - probability
-        price = 1 - market_price
+        win_prob = 1.0 - probability
+        price = actual_entry_price if actual_entry_price is not None else (1.0 - market_price)
 
-    if price <= 0 or price >= 1:
-        return 0
+    if price <= 0.01 or price >= 0.99:
+        return 0.0
 
-    odds = (1 - price) / price
+    # If win probability is not strictly greater than entry price, EV is negative
+    if win_prob <= price:
+        return 0.0
 
-    lose_prob = 1 - win_prob
-    kelly = (win_prob * odds - lose_prob) / odds
+    # Binary prediction market Kelly formula:
+    # odds b = (1 - price) / price
+    # f = (win_prob * b - (1 - win_prob)) / b = (win_prob - price) / (1 - price)
+    kelly = (win_prob - price) / (1.0 - price)
 
     # Apply fractional Kelly
     kelly *= settings.KELLY_FRACTION
@@ -109,8 +116,7 @@ def calculate_kelly_size(
     # Cap at maximum per-trade limit
     max_fraction = 0.05  # 5% max per trade
     kelly = min(kelly, max_fraction)
-
-    kelly = max(kelly, 0)
+    kelly = max(kelly, 0.0)
 
     size = kelly * bankroll
 
@@ -144,6 +150,21 @@ async def generate_btc_signal(market: BtcMarket) -> Optional[TradingSignal]:
     # Skip resolved markets
     if market_up_prob < 0.02 or market_up_prob > 0.98:
         return None
+
+    # --- C-137 Pre-Flight: Frigo Calibration Check ---
+    is_permitted, lockout_reason = calibration_harness.is_category_permitted("btc")
+    if not is_permitted:
+        return TradingSignal(
+            market=market,
+            model_probability=market_up_prob,
+            market_probability=market_up_prob,
+            edge=0.0,
+            direction="up",
+            confidence=0.0,
+            kelly_fraction=0.0,
+            suggested_size=0.0,
+            reasoning=f"[C-137 LOCKDOWN] {lockout_reason}",
+        )
 
     # --- Entry price filter: only trade when price ≤ 50c ---
     entry_price = market_up_prob  # will be overridden per-direction below
@@ -204,9 +225,12 @@ async def generate_btc_signal(market: BtcMarket) -> Optional[TradingSignal]:
     )
 
     # Convert composite (-1..+1) to probability (0.35..0.65)
-    # Wider range lets us express real edge when indicators converge
-    model_up_prob = 0.50 + composite * 0.15
-    model_up_prob = max(0.35, min(0.65, model_up_prob))
+    raw_model_up = 0.50 + composite * 0.15
+    raw_model_up = max(0.35, min(0.65, raw_model_up))
+
+    # --- C-137 Becker Quantitative Microstructure & FLB Warping ---
+    micro_engine = MicrostructureEngine()
+    model_up_prob = micro_engine.calibrate_probability(raw_model_up)
 
     # Calculate edge and direction
     edge, direction = calculate_edge(model_up_prob, market_up_prob)
@@ -214,8 +238,22 @@ async def generate_btc_signal(market: BtcMarket) -> Optional[TradingSignal]:
     # --- Entry price filter: only buy the cheap side (≤ MAX_ENTRY_PRICE) ---
     if direction == "up":
         entry_price = market_up_prob
+        target_prob = model_up_prob
     else:
         entry_price = market.down_price
+        target_prob = 1.0 - model_up_prob
+
+    # --- C-137 Friction & Gate 2 Net Edge Hurdle ---
+    has_net_edge, net_edge, _ = micro_engine.extract_net_edge(
+        model_prob=target_prob,
+        market_price=entry_price,
+        contracts=10.0,
+        min_hurdle=settings.MIN_EDGE_THRESHOLD
+    )
+
+    # --- C-137 Gate 1: Spread / Liquidity Check ---
+    spread = abs(market.up_price - (1.0 - market.down_price))
+    spread_ok = spread <= 0.08  # Reject if book spread > 8c
 
     # Time-remaining filter: only trade windows in the sweet spot
     now = datetime.utcnow()
@@ -226,24 +264,22 @@ async def generate_btc_signal(market: BtcMarket) -> Optional[TradingSignal]:
     time_remaining = (window_end - now).total_seconds()
     time_ok = settings.MIN_TIME_REMAINING <= time_remaining <= settings.MAX_TIME_REMAINING
 
-    passes_filters = has_convergence and entry_price <= settings.MAX_ENTRY_PRICE and time_ok
+    passes_filters = has_convergence and entry_price <= settings.MAX_ENTRY_PRICE and time_ok and has_net_edge and spread_ok
 
-    # Zero out edge if filters fail (signal still returned for UI visibility)
-    if not passes_filters:
-        edge = 0.0
+    # Use net edge after fees/friction
+    edge = net_edge if passes_filters else 0.0
 
     # Confidence: based on convergence strength + volatility
-    #   Low volatility = lower confidence (less movement expected)
     vol_factor = min(1.0, micro.volatility / 0.05) if micro.volatility > 0 else 0.5
     convergence_strength = max(up_votes, down_votes) / 4.0
     confidence = min(0.8, 0.3 + convergence_strength * 0.3 + abs(composite) * 0.2) * vol_factor
 
-    # Kelly sizing
+    # Kelly sizing (Quarter-Kelly via C-137 Fortress Governor)
     bankroll = settings.INITIAL_BANKROLL
     suggested_size = calculate_kelly_size(
         edge=abs(edge),
-        probability=model_up_prob,
-        market_price=market_up_prob,
+        probability=target_prob,
+        market_price=entry_price,
         direction=direction,
         bankroll=bankroll,
     )

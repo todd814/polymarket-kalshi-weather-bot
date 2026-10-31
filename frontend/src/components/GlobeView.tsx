@@ -18,11 +18,13 @@ interface CityMarker {
 }
 
 const CITIES: Record<string, { lat: number; lng: number; name: string }> = {
-  nyc: { lat: 40.7128, lng: -74.006, name: 'NYC' },
-  chicago: { lat: 41.8781, lng: -87.6298, name: 'CHI' },
-  miami: { lat: 25.7617, lng: -80.1918, name: 'MIA' },
-  los_angeles: { lat: 34.0522, lng: -118.2437, name: 'LA' },
-  denver: { lat: 39.7392, lng: -104.9903, name: 'DEN' },
+  nyc: { lat: 40.7789, lng: -73.9692, name: 'NYC' },
+  chicago: { lat: 41.9742, lng: -87.9073, name: 'CHI' },
+  miami: { lat: 25.7959, lng: -80.287, name: 'MIA' },
+  los_angeles: { lat: 33.9425, lng: -118.4081, name: 'LA' },
+  denver: { lat: 39.8561, lng: -104.6737, name: 'DEN' },
+  austin: { lat: 30.3208, lng: -97.7604, name: 'AUS' },
+  houston: { lat: 29.9902, lng: -95.3368, name: 'HOU' },
 }
 
 export function GlobeView({ forecasts, signals }: Props) {

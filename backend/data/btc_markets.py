@@ -33,6 +33,7 @@ class BtcMarket:
     window_end: datetime
     volume: float
     closed: bool
+    platform: str = "polymarket"
 
     @property
     def event_slug(self) -> str:

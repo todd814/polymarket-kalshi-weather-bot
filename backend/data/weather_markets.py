@@ -18,6 +18,8 @@ CITY_ALIASES = {
     "los angeles": "los_angeles",
     "la": "los_angeles",
     "denver": "denver",
+    "austin": "austin",
+    "houston": "houston",
 }
 
 # Month name to number
@@ -40,13 +42,15 @@ class WeatherMarket:
     city_key: str
     city_name: str
     target_date: date
-    threshold_f: float       # Temperature threshold in Fahrenheit
+    threshold_f: float       # Temperature threshold in Fahrenheit (floor or single strike)
     metric: str              # "high" or "low"
-    direction: str           # "above" or "below"
+    direction: str           # "above", "below", or "between"
     yes_price: float         # Price of YES outcome (0-1)
     no_price: float          # Price of NO outcome (0-1)
     volume: float = 0.0
     closed: bool = False
+    cap_f: Optional[float] = None        # Upper bound for "between" strike types
+    strike_type: Optional[str] = None    # "greater", "less", or "between"
 
 
 def _parse_weather_market_title(title: str) -> Optional[dict]:

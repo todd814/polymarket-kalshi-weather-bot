@@ -1,5 +1,5 @@
 """FastAPI backend for BTC 5-min trading bot dashboard."""
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -95,6 +95,8 @@ class MicrostructureResponse(BaseModel):
 
 
 class SignalResponse(BaseModel):
+    model_config = {"protected_namespaces": ()}
+
     market_ticker: str
     market_title: str
     platform: str
@@ -126,6 +128,7 @@ class TradeResponse(BaseModel):
     settled: bool
     result: str
     pnl: Optional[float]
+    is_paper: Optional[bool] = False
 
 
 class BotStats(BaseModel):
@@ -136,6 +139,10 @@ class BotStats(BaseModel):
     total_pnl: float
     is_running: bool
     last_run: Optional[datetime]
+    paper_trades: Optional[int] = 0
+    paper_winning_trades: Optional[int] = 0
+    paper_win_rate: Optional[float] = 0.0
+    paper_pnl: Optional[float] = 0.0
 
 
 class CalibrationBucket(BaseModel):
@@ -183,6 +190,8 @@ class WeatherMarketResponse(BaseModel):
 
 
 class WeatherSignalResponse(BaseModel):
+    model_config = {"protected_namespaces": ()}
+
     market_id: str
     city_key: str
     city_name: str
@@ -234,6 +243,7 @@ async def startup():
 
     db = SessionLocal()
     try:
+        from backend.data.kalshi_client import kalshi_credentials_present, KalshiClient
         state = db.query(BotState).first()
         if not state:
             state = BotState(
@@ -250,6 +260,23 @@ async def startup():
             state.is_running = True
             db.commit()
             print(f"Loaded bot state: Bankroll ${state.bankroll:,.2f}, P&L ${state.total_pnl:+,.2f}, {state.total_trades} trades")
+
+        if settings.KALSHI_SYNC_BALANCE and kalshi_credentials_present():
+            try:
+                client = KalshiClient()
+                bal_data = await client.get_balance()
+                if bal_data.get("balance_dollars") is not None:
+                    real_bal = float(bal_data["balance_dollars"])
+                    state.bankroll = real_bal
+                    db.commit()
+                    print(f"💰 Synced bankroll with live Kalshi Demo balance: ${real_bal:,.2f}")
+                elif bal_data.get("balance") is not None:
+                    real_bal = float(bal_data["balance"]) / 100.0
+                    state.bankroll = real_bal
+                    db.commit()
+                    print(f"💰 Synced bankroll with live Kalshi Demo balance: ${real_bal:,.2f}")
+            except Exception as e:
+                print(f"Could not auto-sync Kalshi balance: {e}")
     finally:
         db.close()
 
@@ -283,9 +310,23 @@ async def shutdown():
     stop_scheduler()
 
 
+# Static frontend directory (for single-service deployment on GCP)
+frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist"))
+if os.path.exists(frontend_dist):
+    from fastapi.staticfiles import StaticFiles
+    assets_dir = os.path.join(frontend_dist, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+
 # Core endpoints
 @app.get("/")
-async def root():
+async def root(request: Request):
+    index_html = os.path.join(frontend_dist, "index.html")
+    accept = request.headers.get("accept", "")
+    if os.path.exists(index_html) and "application/json" not in accept:
+        from starlette.responses import FileResponse
+        return FileResponse(index_html)
     return {"status": "ok", "message": "BTC 5-Min Trading Bot API v3.0", "simulation_mode": settings.SIMULATION_MODE}
 
 
@@ -300,16 +341,33 @@ async def get_stats(db: Session = Depends(get_db)):
     if not state:
         raise HTTPException(status_code=404, detail="Bot state not initialized")
 
-    win_rate = state.winning_trades / state.total_trades if state.total_trades > 0 else 0
+    # Win rate calculated strictly over settled LIVE trades, preventing in-flight and paper distortions
+    live_trades = db.query(Trade).filter(Trade.is_paper == False).all()
+    live_settled = [t for t in live_trades if t.settled and t.result in ("win", "loss")]
+    live_wins = sum(1 for t in live_settled if t.result == "win")
+    live_total = len(live_settled)
+    live_win_rate = (live_wins / live_total) if live_total > 0 else 0.0
+
+    # Separate paper trading telemetry (high-volume data harvesting)
+    paper_trades = db.query(Trade).filter(Trade.is_paper == True).all()
+    paper_settled = [t for t in paper_trades if t.settled and t.result in ("win", "loss")]
+    paper_wins = sum(1 for t in paper_settled if t.result == "win")
+    paper_total = len(paper_settled)
+    paper_win_rate = (paper_wins / paper_total) if paper_total > 0 else 0.0
+    paper_pnl = sum(t.pnl for t in paper_settled if t.pnl is not None)
 
     return BotStats(
-        bankroll=state.bankroll,
-        total_trades=state.total_trades,
-        winning_trades=state.winning_trades,
-        win_rate=win_rate,
-        total_pnl=state.total_pnl,
+        bankroll=round(state.bankroll, 2),
+        total_trades=len(live_trades),
+        winning_trades=live_wins,
+        win_rate=round(live_win_rate, 4),
+        total_pnl=round(state.total_pnl, 2),
         is_running=state.is_running,
-        last_run=state.last_run
+        last_run=state.last_run,
+        paper_trades=len(paper_trades),
+        paper_winning_trades=paper_wins,
+        paper_win_rate=round(paper_win_rate, 4),
+        paper_pnl=round(paper_pnl, 2),
     )
 
 
@@ -406,11 +464,14 @@ def _signal_to_response(s: TradingSignal, actionable: bool = False) -> SignalRes
 async def get_trades(
     limit: int = 50,
     status: Optional[str] = None,
+    is_paper: Optional[bool] = None,
     db: Session = Depends(get_db)
 ):
     query = db.query(Trade)
     if status:
         query = query.filter(Trade.result == status)
+    if is_paper is not None:
+        query = query.filter(Trade.is_paper == is_paper)
     trades = query.order_by(Trade.timestamp.desc()).limit(limit).all()
 
     return [
@@ -425,27 +486,34 @@ async def get_trades(
             timestamp=t.timestamp,
             settled=t.settled,
             result=t.result,
-            pnl=t.pnl
+            pnl=t.pnl,
+            is_paper=getattr(t, "is_paper", False),
         )
         for t in trades
     ]
 
 
 @app.get("/api/equity-curve")
-async def get_equity_curve(db: Session = Depends(get_db)):
-    trades = db.query(Trade).filter(Trade.settled == True).order_by(Trade.timestamp).all()
+async def get_equity_curve(is_paper: bool = False, db: Session = Depends(get_db)):
+    state = db.query(BotState).first()
+    # Baseline starting bankroll tracks actual configured capital rather than static defaults
+    starting_bankroll = (state.bankroll - state.total_pnl) if state else settings.INITIAL_BANKROLL
+
+    trades = db.query(Trade).filter(
+        Trade.settled == True,
+        Trade.is_paper == is_paper
+    ).order_by(Trade.timestamp).all()
 
     curve = []
-    cumulative_pnl = 0
-    bankroll = settings.INITIAL_BANKROLL
+    cumulative_pnl = 0.0
 
     for trade in trades:
         if trade.pnl is not None:
             cumulative_pnl += trade.pnl
             curve.append({
                 "timestamp": trade.timestamp.isoformat(),
-                "pnl": cumulative_pnl,
-                "bankroll": bankroll + cumulative_pnl,
+                "pnl": round(cumulative_pnl, 2),
+                "bankroll": round(starting_bankroll + cumulative_pnl, 2),
                 "trade_id": trade.id
             })
 
@@ -472,16 +540,17 @@ async def simulate_trade(signal_ticker: str, db: Session = Depends(get_db)):
         market_ticker=signal.market.market_id,
         platform="polymarket",
         event_slug=signal.market.slug,
+        market_type="btc",
         direction=signal.direction,
         entry_price=entry_price,
         size=min(signal.suggested_size, state.bankroll * 0.05),
         model_probability=signal.model_probability,
         market_price_at_entry=signal.market_probability,
-        edge_at_entry=signal.edge
+        edge_at_entry=signal.edge,
+        is_paper=True,
     )
 
     db.add(trade)
-    state.total_trades += 1
     db.commit()
 
     log_event("trade", f"Manual BTC trade: {signal.direction.upper()} {signal.market.slug}")
@@ -548,8 +617,6 @@ def _compute_calibration_summary(db: Session) -> Optional[CalibrationSummary]:
     settled_signals = db.query(Signal).filter(Signal.outcome_correct.isnot(None)).all()
 
     if not settled_signals:
-        if total_signals == 0:
-            return None
         return CalibrationSummary(
             total_signals=total_signals,
             total_with_outcome=0,
@@ -630,27 +697,36 @@ async def get_calibration(db: Session = Depends(get_db)):
 # Kalshi endpoints
 @app.get("/api/kalshi/status")
 async def get_kalshi_status():
-    """Test Kalshi API authentication and return connection status."""
+    """Test Kalshi API connectivity (demo or prod) and return connection status."""
     from backend.data.kalshi_client import KalshiClient, kalshi_credentials_present
 
-    if not kalshi_credentials_present():
-        return {
-            "connected": False,
-            "error": "Kalshi credentials not configured (KALSHI_API_KEY_ID / KALSHI_PRIVATE_KEY_PATH)",
-        }
+    client = KalshiClient()
+    status = {
+        "use_demo": settings.KALSHI_USE_DEMO,
+        "base_url": client.base_url,
+        "credentials_configured": kalshi_credentials_present(),
+        "public_api_connected": False,
+        "authenticated": False,
+    }
 
     try:
-        client = KalshiClient()
-        balance_data = await client.get_balance()
-        return {
-            "connected": True,
-            "balance": balance_data,
-        }
+        test_markets = await client.get_markets({"limit": 1})
+        status["public_api_connected"] = bool(test_markets)
     except Exception as e:
-        return {
-            "connected": False,
-            "error": str(e),
-        }
+        status["public_api_error"] = str(e)
+
+    if kalshi_credentials_present():
+        try:
+            balance_data = await client.get_balance()
+            status["authenticated"] = True
+            status["balance"] = balance_data
+        except Exception as e:
+            status["auth_error"] = str(e)
+
+    return {
+        "connected": status["public_api_connected"] and (status["authenticated"] or settings.SIMULATION_MODE),
+        **status,
+    }
 
 
 # Weather endpoints
@@ -704,11 +780,9 @@ async def get_weather_markets():
         # Also fetch Kalshi markets if enabled
         if settings.KALSHI_ENABLED:
             try:
-                from backend.data.kalshi_client import kalshi_credentials_present
                 from backend.data.kalshi_markets import fetch_kalshi_weather_markets
-                if kalshi_credentials_present():
-                    kalshi_markets = await fetch_kalshi_weather_markets(city_keys)
-                    markets.extend(kalshi_markets)
+                kalshi_markets = await fetch_kalshi_weather_markets(city_keys)
+                markets.extend(kalshi_markets)
             except Exception:
                 pass
 
@@ -823,8 +897,21 @@ async def reset_bot(db: Session = Depends(get_db)):
     try:
         trades_deleted = db.query(Trade).delete()
         state = db.query(BotState).first()
+        current_bankroll = settings.INITIAL_BANKROLL
+        from backend.data.kalshi_client import kalshi_credentials_present, KalshiClient
+        if kalshi_credentials_present():
+            try:
+                c = KalshiClient()
+                b = await c.get_balance()
+                if b.get("balance_dollars") is not None:
+                    current_bankroll = float(b["balance_dollars"])
+                elif b.get("balance") is not None:
+                    current_bankroll = float(b["balance"]) / 100.0
+            except Exception:
+                pass
+
         if state:
-            state.bankroll = settings.INITIAL_BANKROLL
+            state.bankroll = current_bankroll
             state.total_trades = 0
             state.winning_trades = 0
             state.total_pnl = 0.0
@@ -833,13 +920,13 @@ async def reset_bot(db: Session = Depends(get_db)):
         ai_logs_deleted = db.query(AILog).delete()
         db.commit()
 
-        log_event("success", f"Bot reset: {trades_deleted} trades deleted. Fresh start with ${settings.INITIAL_BANKROLL:,.2f}")
+        log_event("success", f"Bot reset: {trades_deleted} trades deleted. Fresh start with ${current_bankroll:,.2f}")
 
         return {
             "status": "reset",
             "trades_deleted": trades_deleted,
             "ai_logs_deleted": ai_logs_deleted,
-            "new_bankroll": settings.INITIAL_BANKROLL
+            "new_bankroll": current_bankroll
         }
 
     except Exception as e:
@@ -939,13 +1026,18 @@ async def get_dashboard(db: Session = Depends(get_db)):
             timestamp=t.timestamp,
             settled=t.settled,
             result=t.result,
-            pnl=t.pnl
+            pnl=t.pnl,
+            is_paper=getattr(t, "is_paper", False),
         )
         for t in trades
     ]
 
-    # Equity curve
-    equity_trades = db.query(Trade).filter(Trade.settled == True).order_by(Trade.timestamp).all()
+    # Equity curve anchored dynamically to active live bankroll
+    starting_bankroll = (stats.bankroll - stats.total_pnl) if stats else settings.INITIAL_BANKROLL
+    equity_trades = db.query(Trade).filter(
+        Trade.settled == True,
+        Trade.is_paper == False
+    ).order_by(Trade.timestamp).all()
     equity_curve = []
     cumulative_pnl = 0
     for trade in equity_trades:
@@ -953,8 +1045,8 @@ async def get_dashboard(db: Session = Depends(get_db)):
             cumulative_pnl += trade.pnl
             equity_curve.append({
                 "timestamp": trade.timestamp.isoformat(),
-                "pnl": cumulative_pnl,
-                "bankroll": settings.INITIAL_BANKROLL + cumulative_pnl
+                "pnl": round(cumulative_pnl, 2),
+                "bankroll": round(starting_bankroll + cumulative_pnl, 2)
             })
 
     # Calibration summary
@@ -1040,6 +1132,53 @@ async def websocket_events(websocket: WebSocket):
         ws_manager.disconnect(websocket)
     except Exception:
         ws_manager.disconnect(websocket)
+
+
+@app.get("/api/c137/calibration")
+async def get_c137_calibration():
+    """Returns C-137 Brier Score and Category Lockout status from delightful-bose."""
+    from backend.analytics.calibration import calibration_harness
+    btc_brier = calibration_harness.get_category_brier("btc")
+    btc_permitted, btc_reason = calibration_harness.is_category_permitted("btc")
+    weather_brier = calibration_harness.get_category_brier("weather")
+    weather_permitted, weather_reason = calibration_harness.is_category_permitted("weather")
+    global_brier = calibration_harness.get_global_brier()
+
+    return {
+        "global_brier": round(global_brier, 4) if global_brier else None,
+        "categories": {
+            "btc": {
+                "brier_score": round(btc_brier, 4) if btc_brier else None,
+                "permitted": btc_permitted,
+                "reason": btc_reason,
+                "trades_audited": len(calibration_harness.category_records.get("btc", []))
+            },
+            "weather": {
+                "brier_score": round(weather_brier, 4) if weather_brier else None,
+                "permitted": weather_permitted,
+                "reason": weather_reason,
+                "trades_audited": len(calibration_harness.category_records.get("weather", []))
+            }
+        },
+        "locked_categories": calibration_harness.locked_categories
+    }
+
+
+# SPA fallback route for frontend routing
+if os.path.exists(frontend_dist):
+    from starlette.responses import FileResponse
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        if full_path.startswith(("api", "ws", "docs", "openapi.json")):
+            raise HTTPException(status_code=404, detail="Not Found")
+        file_path = os.path.join(frontend_dist, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        index_html = os.path.join(frontend_dist, "index.html")
+        if os.path.exists(index_html):
+            return FileResponse(index_html)
+        raise HTTPException(status_code=404, detail="Not Found")
 
 
 if __name__ == "__main__":

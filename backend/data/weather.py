@@ -9,47 +9,77 @@ import time
 
 logger = logging.getLogger("trading_bot")
 
-# City configurations with lat/lon and NWS station identifiers
+# City configurations with official NWS ICAO climate station lat/lon and local standard UTC offsets
 CITY_CONFIG: Dict[str, dict] = {
     "nyc": {
         "name": "New York City",
-        "lat": 40.7128,
-        "lon": -74.0060,
+        "lat": 40.7789,
+        "lon": -73.9692,
         "nws_station": "KNYC",
         "nws_office": "OKX",
         "nws_gridpoint": "OKX/33,37",
+        "utc_offset": -5,
+        "tz": "America/New_York",
     },
     "chicago": {
         "name": "Chicago",
-        "lat": 41.8781,
-        "lon": -87.6298,
+        "lat": 41.9742,
+        "lon": -87.9073,
         "nws_station": "KORD",
         "nws_office": "LOT",
         "nws_gridpoint": "LOT/75,72",
+        "utc_offset": -6,
+        "tz": "America/Chicago",
     },
     "miami": {
         "name": "Miami",
-        "lat": 25.7617,
-        "lon": -80.1918,
+        "lat": 25.7959,
+        "lon": -80.2870,
         "nws_station": "KMIA",
         "nws_office": "MFL",
         "nws_gridpoint": "MFL/75,53",
+        "utc_offset": -5,
+        "tz": "America/New_York",
     },
     "los_angeles": {
         "name": "Los Angeles",
-        "lat": 34.0522,
-        "lon": -118.2437,
+        "lat": 33.9425,
+        "lon": -118.4081,
         "nws_station": "KLAX",
         "nws_office": "LOX",
         "nws_gridpoint": "LOX/154,44",
+        "utc_offset": -8,
+        "tz": "America/Los_Angeles",
     },
     "denver": {
         "name": "Denver",
-        "lat": 39.7392,
-        "lon": -104.9903,
+        "lat": 39.8561,
+        "lon": -104.6737,
         "nws_station": "KDEN",
         "nws_office": "BOU",
         "nws_gridpoint": "BOU/62,60",
+        "utc_offset": -7,
+        "tz": "America/Denver",
+    },
+    "austin": {
+        "name": "Austin",
+        "lat": 30.3208,
+        "lon": -97.7604,
+        "nws_station": "KATT",
+        "nws_office": "EWX",
+        "nws_gridpoint": "EWX/156,91",
+        "utc_offset": -6,
+        "tz": "America/Chicago",
+    },
+    "houston": {
+        "name": "Houston",
+        "lat": 29.9902,
+        "lon": -95.3368,
+        "nws_station": "KIAH",
+        "nws_office": "HGX",
+        "nws_gridpoint": "HGX/65,97",
+        "utc_offset": -6,
+        "tz": "America/Chicago",
     },
 }
 
@@ -79,26 +109,46 @@ class EnsembleForecast:
             self.std_low = statistics.stdev(self.member_lows) if len(self.member_lows) > 1 else 0.0
 
     def probability_high_above(self, threshold_f: float) -> float:
-        """Fraction of ensemble members with daily high above threshold."""
+        """Fraction of ensemble members with daily high above integer threshold (NWS +0.5F continuity correction)."""
         if not self.member_highs:
             return 0.5
-        count = sum(1 for h in self.member_highs if h > threshold_f)
+        count = sum(1 for h in self.member_highs if h >= threshold_f + 0.5)
         return count / len(self.member_highs)
 
     def probability_high_below(self, threshold_f: float) -> float:
-        """Fraction of ensemble members with daily high below threshold."""
-        return 1.0 - self.probability_high_above(threshold_f)
+        """Fraction of ensemble members with daily high below integer threshold (NWS -0.5F continuity correction)."""
+        if not self.member_highs:
+            return 0.5
+        count = sum(1 for h in self.member_highs if h < threshold_f - 0.5)
+        return count / len(self.member_highs)
+
+    def probability_high_between(self, floor_f: float, cap_f: float) -> float:
+        """Fraction of ensemble members with daily high between floor_f and cap_f [floor_f - 0.5, cap_f + 0.5)."""
+        if not self.member_highs:
+            return 0.20
+        count = sum(1 for h in self.member_highs if (floor_f - 0.5) <= h < (cap_f + 0.5))
+        return count / len(self.member_highs)
 
     def probability_low_above(self, threshold_f: float) -> float:
-        """Fraction of ensemble members with daily low above threshold."""
+        """Fraction of ensemble members with daily low above integer threshold (NWS +0.5F continuity correction)."""
         if not self.member_lows:
             return 0.5
-        count = sum(1 for l in self.member_lows if l > threshold_f)
+        count = sum(1 for l in self.member_lows if l >= threshold_f + 0.5)
         return count / len(self.member_lows)
 
     def probability_low_below(self, threshold_f: float) -> float:
-        """Fraction of ensemble members with daily low below threshold."""
-        return 1.0 - self.probability_low_above(threshold_f)
+        """Fraction of ensemble members with daily low below integer threshold (NWS -0.5F continuity correction)."""
+        if not self.member_lows:
+            return 0.5
+        count = sum(1 for l in self.member_lows if l < threshold_f - 0.5)
+        return count / len(self.member_lows)
+
+    def probability_low_between(self, floor_f: float, cap_f: float) -> float:
+        """Fraction of ensemble members with daily low between floor_f and cap_f [floor_f - 0.5, cap_f + 0.5)."""
+        if not self.member_lows:
+            return 0.20
+        count = sum(1 for l in self.member_lows if (floor_f - 0.5) <= l < (cap_f + 0.5))
+        return count / len(self.member_lows)
 
     @property
     def ensemble_agreement(self) -> float:
@@ -114,6 +164,10 @@ class EnsembleForecast:
 # Simple cache: (city_key, target_date_str) -> (timestamp, EnsembleForecast)
 _forecast_cache: Dict[str, tuple] = {}
 _CACHE_TTL = 900  # 15 minutes
+
+# Simple cache for NWS surface observations: (city_key, target_date_str) -> (timestamp, Dict[str, float])
+_obs_cache: Dict[str, tuple] = {}
+_OBS_CACHE_TTL = 300  # 5 minutes
 
 
 def _celsius_to_fahrenheit(c: float) -> float:
@@ -143,15 +197,16 @@ async def fetch_ensemble_forecast(city_key: str, target_date: Optional[date] = N
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            # Open-Meteo Ensemble API — GFS ensemble with 31 members
+            # Open-Meteo Super-Ensemble API — Blended GFS (31 members) + ECMWF IFS (51 members) = 82 members
             params = {
                 "latitude": city["lat"],
                 "longitude": city["lon"],
                 "daily": "temperature_2m_max,temperature_2m_min",
                 "temperature_unit": "fahrenheit",
+                "timezone": city.get("tz", "auto"),
                 "start_date": target_date.isoformat(),
                 "end_date": target_date.isoformat(),
-                "models": "gfs_seamless",
+                "models": "gfs_seamless,ecmwf_ifs025",
             }
 
             response = await client.get(
@@ -216,6 +271,13 @@ async def fetch_nws_observed_temperature(city_key: str, target_date: Optional[da
     if target_date is None:
         target_date = date.today()
 
+    cache_key = f"{city_key}_{target_date.isoformat()}"
+    now = time.time()
+    if cache_key in _obs_cache:
+        cached_time, cached_obs = _obs_cache[cache_key]
+        if now - cached_time < _OBS_CACHE_TTL:
+            return cached_obs
+
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             # NWS observations endpoint
@@ -223,9 +285,12 @@ async def fetch_nws_observed_temperature(city_key: str, target_date: Optional[da
             url = f"https://api.weather.gov/stations/{station}/observations"
             headers = {"User-Agent": "(trading-bot, contact@example.com)"}
 
-            # Get observations for the target date
-            start = datetime.combine(target_date, datetime.min.time()).isoformat() + "Z"
-            end = datetime.combine(target_date + timedelta(days=1), datetime.min.time()).isoformat() + "Z"
+            # Shift observation window from UTC midnight to station local midnight
+            # so prior-day evening heat does not bleed into today's high-water mark ratchet
+            utc_offset = city.get("utc_offset", -5)
+            local_midnight_utc = datetime.combine(target_date, datetime.min.time()) - timedelta(hours=utc_offset)
+            start = local_midnight_utc.isoformat() + "Z"
+            end = (local_midnight_utc + timedelta(days=1)).isoformat() + "Z"
 
             response = await client.get(url, params={"start": start, "end": end}, headers=headers)
             response.raise_for_status()
@@ -245,10 +310,12 @@ async def fetch_nws_observed_temperature(city_key: str, target_date: Optional[da
             if not temps:
                 return None
 
-            return {
+            result = {
                 "high": max(temps),
                 "low": min(temps),
             }
+            _obs_cache[cache_key] = (now, result)
+            return result
 
     except Exception as e:
         logger.warning(f"Failed to fetch NWS observations for {city_key}: {e}")

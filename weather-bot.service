@@ -1,0 +1,26 @@
+[Unit]
+Description=Polymarket & Kalshi 24/7 Autonomous Weather & BTC Trading Bot
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/weather-bot
+EnvironmentFile=/opt/weather-bot/.env
+ExecStart=/opt/weather-bot/venv/bin/python run.py
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=30
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=weather-bot
+
+# Resource & sandbox limits for e2-micro VM stability
+LimitNOFILE=65536
+MemoryMax=850M
+MemoryHigh=750M
+
+[Install]
+WantedBy=multi-user.target

@@ -131,11 +131,18 @@ export function TradesTable({ trades }: Props) {
                   )}
                 </td>
                 <td className="py-1 px-1.5">
-                  <span className={`text-[9px] font-medium uppercase ${
-                    isPending ? 'text-amber-500' : isWin ? 'text-green-500' : 'text-red-500'
-                  }`}>
-                    {isPending ? 'PND' : isWin ? 'WIN' : 'LOSS'}
-                  </span>
+                  <div className="flex items-center gap-1">
+                    <span className={`text-[9px] font-medium uppercase ${
+                      isPending ? 'text-amber-500' : isWin ? 'text-green-500' : 'text-red-500'
+                    }`}>
+                      {isPending ? 'PND' : isWin ? 'WIN' : 'LOSS'}
+                    </span>
+                    {trade.is_paper && (
+                      <span className="text-[8px] px-1 py-0.2 rounded bg-amber-500/10 text-amber-400 font-mono border border-amber-500/20">
+                        PAPER
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="py-1 px-1.5">
                   <span className="text-neutral-400 truncate block max-w-[100px]" title={trade.event_slug || trade.market_ticker}>

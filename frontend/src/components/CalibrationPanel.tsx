@@ -5,6 +5,29 @@ interface Props {
 }
 
 export function CalibrationPanel({ calibration }: Props) {
+  if (calibration.total_with_outcome === 0) {
+    return (
+      <div className="space-y-2 py-1">
+        <div className="flex items-center gap-3">
+          <div className="text-2xl font-bold tabular-nums text-neutral-400">
+            --%
+          </div>
+          <div className="text-[10px] text-neutral-500 leading-tight">
+            <div>Accuracy</div>
+            <div className="text-amber-500">Calibrating...</div>
+          </div>
+        </div>
+        <div className="text-[10px] text-neutral-500">
+          <span>Brier: </span>
+          <span className="text-neutral-400">Awaiting settlements</span>
+        </div>
+        <div className="text-[9px] text-neutral-500 tabular-nums">
+          {calibration.total_signals} fresh signals tracked / 0 settled
+        </div>
+      </div>
+    )
+  }
+
   const accuracyPct = (calibration.accuracy * 100).toFixed(0)
   const accuracyColor = calibration.accuracy >= 0.55 ? '#22c55e' : calibration.accuracy < 0.50 ? '#dc2626' : '#a1a1aa'
 

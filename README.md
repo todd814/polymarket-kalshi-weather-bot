@@ -13,18 +13,22 @@ A multi-strategy trading bot that identifies pricing inefficiencies in predictio
 ### Strategy 1: BTC 5-Minute Up/Down
 Scans Polymarket BTC 5-minute Up/Down markets every 60 seconds. Uses real-time 1-minute candle data from Coinbase/Kraken/Binance to compute RSI, momentum, VWAP deviation, SMA crossover, and market skew as a weighted composite signal. Trades when edge > 2%.
 
-### Strategy 2: Weather Temperature (Kalshi + Polymarket)
-Scans weather temperature markets on **Kalshi** (KXHIGH series) and **Polymarket** every 5 minutes. Uses 31-member GFS ensemble forecasts from Open-Meteo to estimate the probability of temperature thresholds being exceeded. Trades when edge > 8%. Kalshi markets are auto-discovered via the `KXHIGHNY`, `KXHIGHCHI`, `KXHIGHMIA`, `KXHIGHLAX`, `KXHIGHDEN` series tickers.
+### Strategy 2: Dual-Track Weather Temperature (Live Demo + Shadow Paper)
+Scans weather temperature markets on **Kalshi** (KXHIGH series) and **Polymarket** every 5 minutes using 31-member GFS ensemble forecasts from Open-Meteo:
+- **Track 1: Live Kalshi Demo Execution** - High-conviction signals with edge >= 8% execute real demo orders on the Kalshi Demo API with fractional Kelly sizing, risk caps, and live bankroll tracking.
+- **Track 2: Shadow Paper Trading** - Broad-spectrum signals above a lower hurdle (edge >= 3%) simultaneously execute as shadow paper trades, harvesting high-volume prediction data across all strikes and cities for continuous Brier score calibration without consuming live cash bankroll.
 
 ### Key Features
 
+- **Dual-Track Trading Engine** - Independent live demo orders and shadow paper data harvesting running concurrently
 - **BTC Microstructure Analysis** - RSI, momentum (1m/5m/15m), VWAP, SMA crossover from real candle data
-- **Ensemble Weather Forecasting** - 31-member GFS ensemble from Open-Meteo for probabilistic temperature predictions
+- **Ensemble Weather Forecasting** - 31-member GFS ensemble from Open-Meteo with ASOS surface observation ratchets
 - **Multi-Platform Trading** - Trades weather markets on both Kalshi (KXHIGH series) and Polymarket simultaneously
 - **Edge Detection** - Identifies mispriced markets across both strategies and platforms
 - **Kelly Criterion Sizing** - Fractional Kelly (15%) position sizing with per-trade caps
-- **Signal Calibration** - Tracks predictions vs outcomes with Brier score
-- **Professional Dashboard** - React 3-column dashboard with real-time updates
+- **Decoupled P&L & Calibration** - Paper trades contribute to Brier score and model calibration without touching live bankroll
+- **Unified Single-Port Deployment** - Built React frontend served directly by FastAPI for $0/mo GCP Always Free hosting
+- **Professional Dashboard** - React 3-column dashboard with real-time updates and live/paper telemetry toggle
 - **Simulation Mode** - Paper trading with virtual bankroll tracking and equity curves
 
 ## Quick Start
@@ -58,9 +62,19 @@ npm install
 
 # Run the frontend
 npm run dev
+Frontend will be at: http://localhost:5173
+
+### 3. Free 24/7 Deployment on Google Cloud (Always Free $0/mo)
+
+The entire application (FastAPI backend + React frontend) runs as a single service on an **`e2-micro` Compute Engine VM** under GCP's Always Free tier ($0/month forever):
+
+```bash
+# Automated turnkey deployment:
+chmod +x deploy_gcp.sh
+./deploy_gcp.sh
 ```
 
-Frontend will be at: http://localhost:5173
+See [GCP_DEPLOYMENT_GUIDE.md](GCP_DEPLOYMENT_GUIDE.md) for complete step-by-step instructions, Cloud Run container deployment, and systemd 24/7 auto-restart configuration.
 
 ## Architecture
 

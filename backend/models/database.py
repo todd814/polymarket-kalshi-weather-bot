@@ -33,6 +33,7 @@ class Trade(Base):
     entry_price = Column(Float)
     size = Column(Float)
     timestamp = Column(DateTime, default=datetime.utcnow)
+    is_paper = Column(Boolean, default=False, index=True)
 
     # Settlement
     settled = Column(Boolean, default=False)
@@ -93,6 +94,7 @@ class Signal(Base):
     reasoning = Column(String)
 
     executed = Column(Boolean, default=False)
+    is_paper = Column(Boolean, default=False, index=True)
 
     # Calibration tracking — filled after settlement
     actual_outcome = Column(String, nullable=True)    # "up" or "down" — actual market result
@@ -174,6 +176,11 @@ def ensure_schema():
             with conn.begin():
                 conn.execute(text("ALTER TABLE trades ADD COLUMN market_type VARCHAR DEFAULT 'btc'"))
 
+    if "is_paper" not in columns:
+        with engine.connect() as conn:
+            with conn.begin():
+                conn.execute(text("ALTER TABLE trades ADD COLUMN is_paper BOOLEAN DEFAULT 0"))
+
     # Add calibration columns to signals table
     try:
         signal_columns = [col["name"] for col in inspector.get_columns("signals")]
@@ -188,6 +195,7 @@ def ensure_schema():
                 ("settlement_value", "FLOAT"),
                 ("settled_at", "DATETIME"),
                 ("market_type", "VARCHAR DEFAULT 'btc'"),
+                ("is_paper", "BOOLEAN DEFAULT 0"),
             ]:
                 if col not in signal_columns:
                     try:

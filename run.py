@@ -12,9 +12,10 @@ if __name__ == "__main__":
     print(f"Starting server on http://0.0.0.0:{port}")
     print(f"API docs available at http://localhost:{port}/docs")
 
+    reload = os.environ.get("RELOAD", "false").lower() in ("true", "1")
     uvicorn.run(
         "backend.api.main:app",
         host="0.0.0.0",
         port=port,
-        reload=os.environ.get("RAILWAY_ENVIRONMENT") is None
+        reload=reload
     )

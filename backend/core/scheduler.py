@@ -84,28 +84,19 @@ async def scan_and_trade_job():
                 return
 
             MAX_TRADES_PER_SCAN = 2
-            MIN_TRADE_SIZE = 10
-            MAX_TRADE_FRACTION = 0.03  # 3% max per trade
+            # Dedicated C-137 Paper BTC Calibration Configuration
+            PAPER_BTC_BANKROLL = 100.0
+            MIN_TRADE_SIZE = 2.0
+            MAX_TRADE_FRACTION = 0.05  # 5% max per trade = $5.00
             MAX_TOTAL_PENDING = settings.MAX_TOTAL_PENDING_TRADES
 
-            # --- Daily loss circuit breaker ---
-            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-            daily_pnl = db.query(func.coalesce(func.sum(Trade.pnl), 0.0)).filter(
-                Trade.settled == True,
-                Trade.settlement_time >= today_start
-            ).scalar()
-
-            if daily_pnl <= -settings.DAILY_LOSS_LIMIT:
-                log_event("warning", f"Daily loss limit hit: ${daily_pnl:.2f} (limit: -${settings.DAILY_LOSS_LIMIT:.0f}). Stopping trades.")
-                return
-
-            total_pending = db.query(Trade).filter(Trade.settled == False).count()
+            total_pending = db.query(Trade).filter(Trade.settled == False, Trade.market_type == "btc").count()
             if total_pending >= MAX_TOTAL_PENDING:
-                log_event("info", f"Max pending trades reached ({total_pending}/{MAX_TOTAL_PENDING})")
+                log_event("info", f"Max pending BTC paper trades reached ({total_pending}/{MAX_TOTAL_PENDING})")
                 return
 
             trades_executed = 0
-            for signal in actionable[:MAX_TRADES_PER_SCAN]:
+            for signal in actionable:
                 # Check if we already have a trade for this market window
                 existing = db.query(Trade).filter(
                     Trade.event_slug == signal.market.slug,
@@ -115,12 +106,11 @@ async def scan_and_trade_job():
                 if existing:
                     continue
 
-                trade_size = min(signal.suggested_size, state.bankroll * MAX_TRADE_FRACTION)
-                trade_size = max(trade_size, MIN_TRADE_SIZE)
+                if signal.suggested_size <= 0:
+                    continue
 
-                if state.bankroll < MIN_TRADE_SIZE:
-                    log_event("warning", f"Bankroll too low: ${state.bankroll:.2f}")
-                    break
+                trade_size = min(signal.suggested_size, PAPER_BTC_BANKROLL * MAX_TRADE_FRACTION)
+                trade_size = max(trade_size, MIN_TRADE_SIZE)
 
                 if trades_executed >= MAX_TRADES_PER_SCAN:
                     break
@@ -130,14 +120,16 @@ async def scan_and_trade_job():
 
                 trade = Trade(
                     market_ticker=signal.market.market_id,
-                    platform="polymarket",
+                    platform=getattr(signal.market, "platform", "polymarket"),
                     event_slug=signal.market.slug,
+                    market_type="btc",
                     direction=signal.direction,
                     entry_price=entry_price,
                     size=trade_size,
                     model_probability=signal.model_probability,
                     market_price_at_entry=signal.market_probability,
-                    edge_at_entry=signal.edge
+                    edge_at_entry=signal.edge,
+                    is_paper=True,
                 )
 
                 db.add(trade)
@@ -146,17 +138,18 @@ async def scan_and_trade_job():
                 # Link trade to the most recent matching Signal and mark it executed
                 matching_signal = db.query(Signal).filter(
                     Signal.market_ticker == signal.market.market_id,
+                    Signal.market_type == "btc",
                     Signal.executed == False,
                 ).order_by(Signal.timestamp.desc()).first()
                 if matching_signal:
                     matching_signal.executed = True
+                    matching_signal.is_paper = True
                     trade.signal_id = matching_signal.id
 
-                state.total_trades += 1
                 trades_executed += 1
 
                 log_event("trade",
-                    f"BTC {signal.direction.upper()} ${trade_size:.0f} @ {entry_price:.0%} | {signal.market.slug}",
+                    f"[C-137 PAPER CALIBRATION] Simulated BTC {signal.direction.upper()} ${trade_size:.0f} @ {entry_price:.0%} | {signal.market.slug}",
                     {
                         "slug": signal.market.slug,
                         "direction": signal.direction,
@@ -217,45 +210,94 @@ async def weather_scan_and_trade_job():
                 return
 
             MAX_TRADES_PER_SCAN = 3
-            MIN_TRADE_SIZE = 10
-            MAX_WEATHER_ALLOCATION = 500.0  # Max total exposure to weather markets
+            MIN_TRADE_SIZE = max(1.0, round(state.bankroll * 0.01, 2))
+            MAX_WEATHER_ALLOCATION = max(20.0, round(state.bankroll * 0.50, 2))  # Max 50% exposure to weather markets
 
-            # Check weather allocation limit
+            # Check weather allocation limit (live bankroll only)
             weather_pending = db.query(func.coalesce(func.sum(Trade.size), 0.0)).filter(
                 Trade.settled == False,
                 Trade.market_type == "weather",
+                Trade.is_paper == False,
             ).scalar()
 
-            if weather_pending >= MAX_WEATHER_ALLOCATION:
-                log_event("info", f"Weather allocation limit reached: ${weather_pending:.0f}/${MAX_WEATHER_ALLOCATION:.0f}")
-                return
-
             trades_executed = 0
-            for signal in actionable[:MAX_TRADES_PER_SCAN]:
-                # Check if we already have a trade for this market
-                existing = db.query(Trade).filter(
+            paper_trades_executed = 0
+            attempted_live_tickers = set()
+            live_held_tickers = set()
+
+            # --- TRACK 1: TOP-TIER LIVE KALSHI DEMO TRADING ---
+            for signal in actionable:
+                # Check if we already have an active LIVE trade for this market
+                existing_live = db.query(Trade).filter(
                     Trade.market_ticker == signal.market.market_id,
                     Trade.settled == False,
+                    Trade.is_paper == False,
                 ).first()
 
-                if existing:
+                if existing_live:
+                    live_held_tickers.add(signal.market.market_id)
                     continue
 
-                trade_size = min(signal.suggested_size, settings.WEATHER_MAX_TRADE_SIZE)
-                trade_size = max(trade_size, MIN_TRADE_SIZE)
+                if signal.suggested_size <= 0:
+                    continue
+
+                if trades_executed >= MAX_TRADES_PER_SCAN:
+                    break
+
+                if weather_pending >= MAX_WEATHER_ALLOCATION:
+                    log_event("info", f"Weather allocation limit reached: ${weather_pending:.0f}/${MAX_WEATHER_ALLOCATION:.0f}")
+                    break
 
                 if state.bankroll < MIN_TRADE_SIZE:
                     log_event("warning", f"Bankroll too low: ${state.bankroll:.2f}")
                     break
 
-                if trades_executed >= MAX_TRADES_PER_SCAN:
-                    break
+                attempted_live_tickers.add(signal.market.market_id)
+                trade_size = min(signal.suggested_size, settings.WEATHER_MAX_TRADE_SIZE)
+                trade_size = max(trade_size, MIN_TRADE_SIZE)
 
                 entry_price = signal.market.yes_price if signal.direction == "yes" else signal.market.no_price
 
+                # Live order execution on Kalshi Demo / Prod
+                kalshi_order_id = None
+                if getattr(signal.market, "platform", "") == "kalshi" and settings.KALSHI_EXECUTE_DEMO_ORDERS:
+                    from backend.data.kalshi_client import KalshiClient, kalshi_credentials_present
+                    if kalshi_credentials_present():
+                        try:
+                            k_client = KalshiClient()
+                            num_contracts = max(1, int(trade_size / entry_price))
+                            order_res = await k_client.create_order(
+                                ticker=signal.market.market_id,
+                                contract_type=signal.direction,
+                                count=num_contracts,
+                                price_dollars=entry_price,
+                            )
+                            order_obj = order_res.get("order", order_res) if isinstance(order_res, dict) else {}
+                            kalshi_order_id = order_obj.get("order_id") or (order_res.get("order_id") if isinstance(order_res, dict) else None)
+                            raw_fill = (
+                                order_obj.get("fill_count")
+                                or order_obj.get("fill_count_fp")
+                                or (order_res.get("fill_count") if isinstance(order_res, dict) else 0)
+                                or (order_res.get("fill_count_fp") if isinstance(order_res, dict) else 0)
+                                or 0
+                            )
+                            filled_contracts = float(raw_fill or 0)
+                            if filled_contracts <= 0:
+                                log_event(
+                                    "info",
+                                    f"Kalshi IOC order unfilled (0/{num_contracts} contracts) on {signal.market.market_id}; skipping phantom trade",
+                                    order_res if isinstance(order_res, dict) else {},
+                                )
+                                continue
+                            trade_size = round(filled_contracts * entry_price, 2)
+                            log_event("trade", f"KALSHI DEMO ORDER FILLED: {kalshi_order_id} | {filled_contracts:g}x {signal.direction.upper()} on {signal.market.market_id}", order_res)
+                        except Exception as e:
+                            log_event("error", f"Kalshi order placement error: {e}")
+                            continue
+
                 trade = Trade(
                     market_ticker=signal.market.market_id,
-                    platform="polymarket",
+                    platform=getattr(signal.market, "platform", "kalshi"),
                     event_slug=signal.market.slug,
                     market_type="weather",
                     direction=signal.direction,
@@ -264,10 +306,20 @@ async def weather_scan_and_trade_job():
                     model_probability=signal.model_probability,
                     market_price_at_entry=signal.market_probability,
                     edge_at_entry=signal.edge,
+                    is_paper=False,
                 )
 
                 db.add(trade)
                 db.flush()
+
+                # Clean up any prior shadow paper trade for this market since live trade has executed
+                existing_paper = db.query(Trade).filter(
+                    Trade.market_ticker == signal.market.market_id,
+                    Trade.settled == False,
+                    Trade.is_paper == True,
+                ).first()
+                if existing_paper:
+                    db.delete(existing_paper)
 
                 # Link to signal record
                 matching_signal = db.query(Signal).filter(
@@ -277,13 +329,15 @@ async def weather_scan_and_trade_job():
                 ).order_by(Signal.timestamp.desc()).first()
                 if matching_signal:
                     matching_signal.executed = True
+                    matching_signal.is_paper = False
                     trade.signal_id = matching_signal.id
 
                 state.total_trades += 1
                 trades_executed += 1
+                weather_pending += trade_size
 
                 log_event("trade",
-                    f"WX {signal.market.city_name}: {signal.direction.upper()} "
+                    f"WX [LIVE] {signal.market.city_name}: {signal.direction.upper()} "
                     f"${trade_size:.0f} @ {entry_price:.0%} | "
                     f"{signal.market.metric} {signal.market.direction} {signal.market.threshold_f:.0f}F",
                     {
@@ -293,14 +347,84 @@ async def weather_scan_and_trade_job():
                         "edge": signal.edge,
                         "entry_price": entry_price,
                         "city": signal.market.city_name,
+                        "is_paper": False,
+                    }
+                )
+
+            # --- TRACK 2: SHADOW PAPER WEATHER TRADING (HIGH-VOLUME DATA HARVESTING) ---
+            # Paper trades record for all actionable signals above lower hurdle (e.g. edge >= 3%),
+            # allowing high-volume data collection across all weather markets without consuming live bankroll.
+            paper_hurdle = getattr(settings, "WEATHER_PAPER_MIN_EDGE_THRESHOLD", 0.03)
+            for signal in signals:
+                ticker = signal.market.market_id
+                if ticker in attempted_live_tickers or ticker in live_held_tickers:
+                    continue
+
+                if signal.edge < paper_hurdle:
+                    continue
+
+                entry_price = signal.market.yes_price if signal.direction == "yes" else signal.market.no_price
+                if entry_price <= 0.0 or entry_price >= 1.0:
+                    continue
+
+                # Check if trade already exists
+                existing_paper = db.query(Trade).filter(
+                    Trade.market_ticker == ticker,
+                    Trade.settled == False,
+                ).first()
+                if existing_paper:
+                    continue
+
+                paper_size = 5.0  # Standard simulated contract size ($5)
+                paper_trade = Trade(
+                    market_ticker=ticker,
+                    platform=getattr(signal.market, "platform", "kalshi"),
+                    event_slug=signal.market.slug,
+                    market_type="weather",
+                    direction=signal.direction,
+                    entry_price=entry_price,
+                    size=paper_size,
+                    model_probability=signal.model_probability,
+                    market_price_at_entry=signal.market_probability,
+                    edge_at_entry=signal.edge,
+                    is_paper=True,
+                )
+
+                db.add(paper_trade)
+                db.flush()
+
+                # Link to signal record
+                matching_sig = db.query(Signal).filter(
+                    Signal.market_ticker == ticker,
+                    Signal.market_type == "weather",
+                    Signal.executed == False,
+                ).order_by(Signal.timestamp.desc()).first()
+                if matching_sig:
+                    matching_sig.executed = True
+                    matching_sig.is_paper = True
+                    paper_trade.signal_id = matching_sig.id
+
+                paper_trades_executed += 1
+                log_event("trade",
+                    f"WX [PAPER] {signal.market.city_name}: {signal.direction.upper()} "
+                    f"${paper_size:.0f} @ {entry_price:.0%} (Edge: {signal.edge:+.1%}) | "
+                    f"{signal.market.metric} {signal.market.direction} {signal.market.threshold_f:.0f}F",
+                    {
+                        "slug": signal.market.slug,
+                        "direction": signal.direction,
+                        "size": paper_size,
+                        "edge": signal.edge,
+                        "entry_price": entry_price,
+                        "city": signal.market.city_name,
+                        "is_paper": True,
                     }
                 )
 
             state.last_run = datetime.utcnow()
             db.commit()
 
-            if trades_executed > 0:
-                log_event("success", f"Executed {trades_executed} weather trade(s)")
+            if trades_executed > 0 or paper_trades_executed > 0:
+                log_event("success", f"Executed {trades_executed} live weather trade(s), {paper_trades_executed} paper trade(s)")
             else:
                 log_event("info", "No new weather trades executed")
 

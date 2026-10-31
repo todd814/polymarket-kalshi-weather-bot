@@ -20,8 +20,8 @@ interface Props {
   onScan?: () => void
 }
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-const WS_URL = API_URL.replace(/^http/, 'ws') + '/ws/events'
+const API_URL = import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : (typeof window !== 'undefined' ? '' : 'http://localhost:8000')
+const WS_URL = (API_URL ? API_URL.replace(/^http/, 'ws') : (typeof window !== 'undefined' ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}` : 'ws://localhost:8000')) + '/ws/events'
 
 export function Terminal({ isRunning, lastRun, onStart, onStop, onScan }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)

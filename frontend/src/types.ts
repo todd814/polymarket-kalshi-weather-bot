@@ -65,6 +65,7 @@ export interface Trade {
   settled: boolean
   result: string
   pnl: number | null
+  is_paper?: boolean
 }
 
 export interface BotStats {
@@ -75,6 +76,10 @@ export interface BotStats {
   total_pnl: number
   is_running: boolean
   last_run: string | null
+  paper_trades?: number
+  paper_winning_trades?: number
+  paper_win_rate?: number
+  paper_pnl?: number
 }
 
 export interface EquityPoint {

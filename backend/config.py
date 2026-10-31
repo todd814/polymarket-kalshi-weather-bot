@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     KALSHI_API_KEY_ID: Optional[str] = None
     KALSHI_PRIVATE_KEY_PATH: Optional[str] = None
     KALSHI_ENABLED: bool = True
+    KALSHI_USE_DEMO: bool = True
+    KALSHI_BASE_URL: Optional[str] = None
+    KALSHI_SYNC_BALANCE: bool = True
+    KALSHI_EXECUTE_DEMO_ORDERS: bool = True
 
     # AI API Keys
     GROQ_API_KEY: Optional[str] = None
@@ -30,21 +34,21 @@ class Settings(BaseSettings):
 
     # Bot settings - BTC 5-MIN TRADING
     SIMULATION_MODE: bool = True
-    INITIAL_BANKROLL: float = 10000.0
+    INITIAL_BANKROLL: float = 99.53
     KELLY_FRACTION: float = 0.15  # Fractional Kelly
 
     # BTC 5-min specific settings
     SCAN_INTERVAL_SECONDS: int = 60  # Scan every minute
     SETTLEMENT_INTERVAL_SECONDS: int = 120  # Check settlements every 2 min
     BTC_PRICE_SOURCE: str = "coinbase"
-    MIN_EDGE_THRESHOLD: float = 0.02  # 2% edge required — these are 50/50 markets
+    MIN_EDGE_THRESHOLD: float = 0.06  # Require solid edge
     MAX_ENTRY_PRICE: float = 0.55  # Enter up to 55c
     MAX_TRADES_PER_WINDOW: int = 1
-    MAX_TOTAL_PENDING_TRADES: int = 20
+    MAX_TOTAL_PENDING_TRADES: int = 10
 
-    # Risk management
-    DAILY_LOSS_LIMIT: float = 300.0
-    MAX_TRADE_SIZE: float = 75.0
+    # Risk management (scaled to ~$100 bankroll)
+    DAILY_LOSS_LIMIT: float = 15.0
+    MAX_TRADE_SIZE: float = 5.0
     MIN_TIME_REMAINING: int = 60  # Don't trade windows closing in < 60s
     MAX_TIME_REMAINING: int = 1800  # Trade windows up to 30min out
 
@@ -63,9 +67,10 @@ class Settings(BaseSettings):
     WEATHER_SCAN_INTERVAL_SECONDS: int = 300  # 5 min
     WEATHER_SETTLEMENT_INTERVAL_SECONDS: int = 1800  # 30 min
     WEATHER_MIN_EDGE_THRESHOLD: float = 0.08  # 8% — weather has more signal than 5-min BTC
+    WEATHER_PAPER_MIN_EDGE_THRESHOLD: float = 0.03  # 3% — shadow paper trading hurdle for volume data collection
     WEATHER_MAX_ENTRY_PRICE: float = 0.70
-    WEATHER_MAX_TRADE_SIZE: float = 100.0
-    WEATHER_CITIES: str = "nyc,chicago,miami,los_angeles,denver"
+    WEATHER_MAX_TRADE_SIZE: float = 5.0
+    WEATHER_CITIES: str = "nyc,chicago,miami,los_angeles,denver,austin,houston"
 
     class Config:
         env_file = ".env"
