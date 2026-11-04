@@ -10,17 +10,26 @@ from backend.data.kalshi_client import KalshiClient
 
 logger = logging.getLogger("trading_bot")
 
-HOURLY_SERIES: Dict[str, str] = {
-    "nyc": "KXTEMPNYCH",
-    "chicago": "KXTEMPCHIH",
-    "miami": "KXTEMPMIAH",
-    "los_angeles": "KXTEMPLAXH",
-    "austin": "KXTEMPAUSH",
-    "washington_dc": "KXTEMPDCH",
-    "boston": "KXTEMPBOSH",
+HOURLY_SERIES_CANDIDATES: Dict[str, List[str]] = {
+    "nyc": ["KXTEMPNYCHS", "KXTEMPNYCH"],
+    "chicago": ["KXTEMPCHIHS", "KXTEMPCHIH"],
+    "los_angeles": ["KXTEMPLAXHS", "KXTEMPLAXH"],
+    "miami": ["KXTEMPMIAH"],
+    "austin": ["KXTEMPAUSH"],
+    "washington_dc": ["KXTEMPDCH"],
+    "boston": ["KXTEMPBOSH"],
 }
 
-SERIES_TO_CITY = {v: k for k, v in HOURLY_SERIES.items()}
+# Default series mapping
+HOURLY_SERIES: Dict[str, str] = {
+    k: v[0] for k, v in HOURLY_SERIES_CANDIDATES.items()
+}
+
+SERIES_TO_CITY = {
+    series: city
+    for city, series_list in HOURLY_SERIES_CANDIDATES.items()
+    for series in series_list
+}
 
 
 @dataclass
@@ -125,32 +134,48 @@ async def fetch_kalshi_hourly_markets(
 ) -> List[HourlyMarket]:
     """
     Fetch open hourly temperature markets from Kalshi for configured cities.
+    Automatically queries candidate series (including Synoptic HS series)
+    and falls back to production public feed for paper pricing if demo has 0 markets.
     """
     if not settings.KALSHI_ENABLED:
         return []
 
     client = KalshiClient()
     markets: List[HourlyMarket] = []
-    target_cities = city_keys or list(HOURLY_SERIES.keys())
+    target_cities = city_keys or list(HOURLY_SERIES_CANDIDATES.keys())
+
+    import httpx
 
     for city in target_cities:
-        series = HOURLY_SERIES.get(city)
-        if not series:
-            continue
+        series_candidates = HOURLY_SERIES_CANDIDATES.get(city, [])
+        for series in series_candidates:
+            try:
+                params = {
+                    "series_ticker": series,
+                    "status": "open",
+                    "limit": 100,
+                }
+                data = await client.get_markets(params=params)
+                raw_markets = data.get("markets", [])
 
-        try:
-            params = {
-                "series_ticker": series,
-                "status": "open",
-                "limit": 100,
-            }
-            data = await client._get("/markets", params=params)
-            raw_markets = data.get("markets", [])
-            for m in raw_markets:
-                parsed = _parse_hourly_market(m, city)
-                if parsed and parsed.minutes_remaining > 2.0:  # Skip expiring in < 2 mins
-                    markets.append(parsed)
-        except Exception as e:
-            logger.debug(f"No open hourly markets for {series}: {e}")
+                # If demo environment has 0 markets, fetch live production public order books for paper mode
+                if not raw_markets and settings.KALSHI_USE_DEMO:
+                    async with httpx.AsyncClient(timeout=4.0) as http_client:
+                        prod_resp = await http_client.get(
+                            "https://api.elections.kalshi.com/trade-api/v2/markets",
+                            params=params,
+                            headers={"User-Agent": "WeatherArbitrageBot/2.0"}
+                        )
+                        if prod_resp.status_code == 200:
+                            raw_markets = prod_resp.json().get("markets", [])
+
+                if raw_markets:
+                    for m in raw_markets:
+                        parsed = _parse_hourly_market(m, city)
+                        if parsed and parsed.minutes_remaining > 2.0:
+                            markets.append(parsed)
+                    break  # Found active series for this city, no need to check other candidates
+            except Exception as e:
+                logger.debug(f"No open hourly markets for {series}: {e}")
 
     return markets
