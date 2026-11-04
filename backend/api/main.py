@@ -304,6 +304,8 @@ async def startup():
         print(f"  - Weather cities: {settings.WEATHER_CITIES}")
     else:
         print("  - Weather trading: DISABLED")
+    if getattr(settings, "HOURLY_WEATHER_ENABLED", False):
+        print(f"  - Hourly METAR Paper scan: every {settings.HOURLY_SCAN_INTERVAL_SECONDS}s (edge >= {settings.HOURLY_MIN_EDGE_THRESHOLD:.0%})")
     print("=" * 60)
 
 
@@ -846,6 +848,53 @@ def _weather_signal_to_response(s) -> WeatherSignalResponse:
         ensemble_members=s.ensemble_members,
         actionable=s.passes_threshold,
     )
+
+
+@app.get("/api/weather/metar")
+async def get_metar_observations():
+    """Get latest real-time airport METAR observations for all cities."""
+    from backend.data.metar import fetch_metar_observations
+    obs_map = await fetch_metar_observations()
+    return {
+        station: {
+            "station_id": obs.station_id,
+            "city_key": obs.city_key,
+            "temp_c": obs.temp_c,
+            "temp_f": obs.temp_f,
+            "dewpoint_f": obs.dewpoint_f,
+            "wind_speed_kt": obs.wind_speed_kt,
+            "report_time": obs.report_time.isoformat() if obs.report_time else None,
+            "age_seconds": round(obs.age_seconds, 1),
+            "raw_ob": obs.raw_ob,
+        }
+        for station, obs in obs_map.items()
+    }
+
+
+@app.get("/api/weather/hourly/signals")
+async def get_hourly_signals():
+    """Get current hourly temperature signals from METAR nowcasting."""
+    from backend.core.hourly_signals import scan_for_hourly_signals
+    signals = await scan_for_hourly_signals()
+    return [
+        {
+            "ticker": s.market.ticker,
+            "series_ticker": s.market.series_ticker,
+            "city_key": s.market.city_key,
+            "threshold_f": s.market.threshold_f,
+            "direction": s.direction,
+            "current_temp_f": s.current_temp_f,
+            "expected_temp_f": s.expected_temp_f,
+            "minutes_to_close": s.minutes_to_close,
+            "model_probability": s.model_probability,
+            "market_price": s.market_price,
+            "edge": s.edge,
+            "actionable": s.passes_threshold,
+            "suggested_size": s.suggested_size,
+            "reasoning": s.reasoning,
+        }
+        for s in signals
+    ]
 
 
 @app.get("/api/events", response_model=List[EventResponse])

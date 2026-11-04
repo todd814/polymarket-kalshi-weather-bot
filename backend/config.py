@@ -73,6 +73,13 @@ class Settings(BaseSettings):
     WEATHER_MAX_TRADE_SIZE: float = 5.0
     WEATHER_CITIES: str = "nyc,chicago,miami,los_angeles,denver,austin,houston,washington_dc,boston,philadelphia"
 
+    # Hourly weather trading settings (100% paper-only)
+    HOURLY_WEATHER_ENABLED: bool = True
+    HOURLY_SCAN_INTERVAL_SECONDS: int = 120  # Scan every 2 minutes
+    HOURLY_SETTLEMENT_INTERVAL_SECONDS: int = 300  # Check settlements every 5 minutes
+    HOURLY_MIN_EDGE_THRESHOLD: float = 0.05  # 5% edge hurdle
+    HOURLY_MAX_TRADE_SIZE: float = 5.0
+
     class Config:
         env_file = ".env"
 

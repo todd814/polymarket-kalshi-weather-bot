@@ -564,6 +564,28 @@ def start_scheduler():
             max_instances=1,
         )
 
+    # Hourly weather trading jobs (gated by HOURLY_WEATHER_ENABLED)
+    if getattr(settings, "HOURLY_WEATHER_ENABLED", False):
+        from backend.core.hourly_scheduler import hourly_scan_and_trade_job, hourly_settlement_job
+        hourly_scan_seconds = getattr(settings, "HOURLY_SCAN_INTERVAL_SECONDS", 120)
+        hourly_settle_seconds = getattr(settings, "HOURLY_SETTLEMENT_INTERVAL_SECONDS", 300)
+
+        scheduler.add_job(
+            hourly_scan_and_trade_job,
+            IntervalTrigger(seconds=hourly_scan_seconds),
+            id="hourly_weather_scan",
+            replace_existing=True,
+            max_instances=1,
+        )
+
+        scheduler.add_job(
+            hourly_settlement_job,
+            IntervalTrigger(seconds=hourly_settle_seconds),
+            id="hourly_weather_settlement",
+            replace_existing=True,
+            max_instances=1,
+        )
+
     scheduler.start()
     log_event("success", "BTC 5-min trading scheduler started", {
         "scan_interval": f"{scan_seconds}s",
@@ -577,6 +599,10 @@ def start_scheduler():
 
     if settings.WEATHER_ENABLED:
         asyncio.create_task(weather_scan_and_trade_job())
+
+    if getattr(settings, "HOURLY_WEATHER_ENABLED", False):
+        from backend.core.hourly_scheduler import hourly_scan_and_trade_job
+        asyncio.create_task(hourly_scan_and_trade_job())
 
 
 def stop_scheduler():

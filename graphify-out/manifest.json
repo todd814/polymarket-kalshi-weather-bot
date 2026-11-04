@@ -42,15 +42,15 @@
     "semantic_hash": "89ecbf2f075121f87be249dcbd0c9e2c"
   },
   "backend/api/main.py": {
-    "mtime": 1793377811.7333596,
-    "seen": 1793454302.2270951,
-    "ast_hash": "6976ea6c60b9079c7b076f393fd105b1",
+    "mtime": 1793815032.4307384,
+    "seen": 1793815098.304854,
+    "ast_hash": "906ec5017e15088fdca5a5961930c84d",
     "semantic_hash": ""
   },
   "backend/config.py": {
-    "mtime": 1793811166.9433155,
-    "seen": 1793811700.172647,
-    "ast_hash": "533af2c660929b1c03a01346ecde51cf",
+    "mtime": 1793814964.297435,
+    "seen": 1793815098.304854,
+    "ast_hash": "806fa413689de830c15bc65447eb34fa",
     "semantic_hash": ""
   },
   "backend/core/__init__.py": {
@@ -60,9 +60,9 @@
     "semantic_hash": "872bd76ae95882dc93e879075dcb3af5"
   },
   "backend/core/scheduler.py": {
-    "mtime": 1793377759.0708659,
-    "seen": 1793454302.227097,
-    "ast_hash": "c0c5cbbcaa9e44a6a7f8806ad5059286",
+    "mtime": 1793814999.1620245,
+    "seen": 1793815098.3048582,
+    "ast_hash": "373fe5eef88229b12d1c56a4302cfefa",
     "semantic_hash": ""
   },
   "backend/core/settlement.py": {
@@ -411,6 +411,30 @@
     "mtime": 1793377293.2312002,
     "seen": 1793454302.2271318,
     "ast_hash": "36ce7977a0f18ffbc4ad2ab307d8fbb5",
+    "semantic_hash": ""
+  },
+  "backend/core/hourly_scheduler.py": {
+    "mtime": 1793814953.9812129,
+    "seen": 1793815098.304856,
+    "ast_hash": "e9974fa1fe7159d45840e83df9524b3a",
+    "semantic_hash": ""
+  },
+  "backend/core/hourly_signals.py": {
+    "mtime": 1793814937.648578,
+    "seen": 1793815098.304857,
+    "ast_hash": "760023cb183bc471b2cb4b49186f5f49",
+    "semantic_hash": ""
+  },
+  "backend/data/hourly_markets.py": {
+    "mtime": 1793814914.2206745,
+    "seen": 1793815098.304864,
+    "ast_hash": "81811511a265a7a901ca1b95c5854489",
+    "semantic_hash": ""
+  },
+  "backend/data/metar.py": {
+    "mtime": 1793815069.2655072,
+    "seen": 1793815098.304867,
+    "ast_hash": "4f7ffd8a164666e4dba9d40dc5cbde53",
     "semantic_hash": ""
   }
 }
