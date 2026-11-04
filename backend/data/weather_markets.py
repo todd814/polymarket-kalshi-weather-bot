@@ -20,6 +20,13 @@ CITY_ALIASES = {
     "denver": "denver",
     "austin": "austin",
     "houston": "houston",
+    "washington dc": "washington_dc",
+    "washington d.c.": "washington_dc",
+    "dc": "washington_dc",
+    "washington": "washington_dc",
+    "boston": "boston",
+    "philadelphia": "philadelphia",
+    "philly": "philadelphia",
 }
 
 # Month name to number

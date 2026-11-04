@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     WEATHER_PAPER_MIN_EDGE_THRESHOLD: float = 0.03  # 3% — shadow paper trading hurdle for volume data collection
     WEATHER_MAX_ENTRY_PRICE: float = 0.70
     WEATHER_MAX_TRADE_SIZE: float = 5.0
-    WEATHER_CITIES: str = "nyc,chicago,miami,los_angeles,denver,austin,houston"
+    WEATHER_CITIES: str = "nyc,chicago,miami,los_angeles,denver,austin,houston,washington_dc,boston,philadelphia"
 
     class Config:
         env_file = ".env"

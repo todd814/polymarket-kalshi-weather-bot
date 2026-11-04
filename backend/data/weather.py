@@ -81,6 +81,36 @@ CITY_CONFIG: Dict[str, dict] = {
         "utc_offset": -6,
         "tz": "America/Chicago",
     },
+    "washington_dc": {
+        "name": "Washington D.C.",
+        "lat": 38.8512,
+        "lon": -77.0402,
+        "nws_station": "KDCA",
+        "nws_office": "LWX",
+        "nws_gridpoint": "LWX/97,69",
+        "utc_offset": -5,
+        "tz": "America/New_York",
+    },
+    "boston": {
+        "name": "Boston",
+        "lat": 42.3656,
+        "lon": -71.0096,
+        "nws_station": "KBOS",
+        "nws_office": "BOX",
+        "nws_gridpoint": "BOX/73,102",
+        "utc_offset": -5,
+        "tz": "America/New_York",
+    },
+    "philadelphia": {
+        "name": "Philadelphia",
+        "lat": 39.8729,
+        "lon": -75.2437,
+        "nws_station": "KPHL",
+        "nws_office": "PHI",
+        "nws_gridpoint": "PHI/48,75",
+        "utc_offset": -5,
+        "tz": "America/New_York",
+    },
 }
 
 

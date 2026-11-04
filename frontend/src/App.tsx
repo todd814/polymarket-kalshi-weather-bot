@@ -26,6 +26,9 @@ function CityRadarFallback({ forecasts, signals }: { forecasts: WeatherForecast[
     { key: 'denver', name: 'Denver (DEN)', code: 'DEN' },
     { key: 'austin', name: 'Austin (Bergstrom)', code: 'AUS' },
     { key: 'houston', name: 'Houston (Bush)', code: 'HOU' },
+    { key: 'washington_dc', name: 'Washington (Reagan)', code: 'DCA' },
+    { key: 'boston', name: 'Boston (Logan)', code: 'BOS' },
+    { key: 'philadelphia', name: 'Philadelphia (PHL)', code: 'PHL' },
   ]
 
   return (
