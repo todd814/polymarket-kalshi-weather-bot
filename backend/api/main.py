@@ -294,8 +294,11 @@ async def startup():
     log_event("success", "BTC 5-min trading bot initialized")
 
     print("Bot is now running!")
-    print(f"  - BTC scan: every {settings.SCAN_INTERVAL_SECONDS}s (edge >= {settings.MIN_EDGE_THRESHOLD:.0%})")
-    print(f"  - Settlement check: every {settings.SETTLEMENT_INTERVAL_SECONDS}s")
+    if settings.BTC_ENABLED:
+        print(f"  - BTC scan: every {settings.SCAN_INTERVAL_SECONDS}s (edge >= {settings.MIN_EDGE_THRESHOLD:.0%})")
+        print(f"  - BTC settlement check: every {settings.SETTLEMENT_INTERVAL_SECONDS}s")
+    else:
+        print("  - BTC 5-min trading: DISABLED (C-137 lockdown: negative edge asset retired)")
     if settings.WEATHER_ENABLED:
         print(f"  - Weather scan: every {settings.WEATHER_SCAN_INTERVAL_SECONDS}s (edge >= {settings.WEATHER_MIN_EDGE_THRESHOLD:.0%})")
         print(f"  - Weather cities: {settings.WEATHER_CITIES}")

@@ -344,7 +344,7 @@
       "file_type": "code",
       "norm_label": "ensembleforecast",
       "source_file": "backend/data/weather.py",
-      "source_location": "L88"
+      "source_location": "L118"
     },
     {
       "id": "backend_analytics_calibration_settlementcalibrationharness",
@@ -721,7 +721,7 @@
       "file_type": "code",
       "norm_label": "weathermarket",
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L36"
+      "source_location": "L43"
     },
     {
       "id": "backend_data_crypto_btcmicrostructure",
@@ -1134,7 +1134,7 @@
       "file_type": "code",
       "norm_label": "_extract_price()",
       "source_file": "backend/data/kalshi_markets.py",
-      "source_location": "L114"
+      "source_location": "L120"
     },
     {
       "id": "backend_data_kalshi_markets_fetch_kalshi_weather_markets",
@@ -1146,7 +1146,7 @@
       "file_type": "code",
       "norm_label": "fetch_kalshi_weather_markets()",
       "source_file": "backend/data/kalshi_markets.py",
-      "source_location": "L131"
+      "source_location": "L137"
     },
     {
       "id": "backend_data_kalshi_markets_parse_kalshi_market",
@@ -1158,7 +1158,7 @@
       "file_type": "code",
       "norm_label": "_parse_kalshi_market()",
       "source_file": "backend/data/kalshi_markets.py",
-      "source_location": "L41"
+      "source_location": "L47"
     },
     {
       "id": "backend_data_weather_fetch_ensemble_forecast",
@@ -1170,7 +1170,7 @@
       "file_type": "code",
       "norm_label": "fetch_ensemble_forecast()",
       "source_file": "backend/data/weather.py",
-      "source_location": "L177"
+      "source_location": "L207"
     },
     {
       "id": "backend_data_weather_markets_extract_date",
@@ -1182,7 +1182,7 @@
       "file_type": "code",
       "norm_label": "_extract_date()",
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L119"
+      "source_location": "L126"
     },
     {
       "id": "backend_data_weather_markets_parse_polymarket_weather",
@@ -1194,7 +1194,7 @@
       "file_type": "code",
       "norm_label": "_parse_polymarket_weather()",
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L217"
+      "source_location": "L224"
     },
     {
       "id": "backend_data_weather_markets_parse_weather_market_title",
@@ -1206,7 +1206,7 @@
       "file_type": "code",
       "norm_label": "_parse_weather_market_title()",
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L56"
+      "source_location": "L63"
     },
     {
       "id": "test_kalshi_demo_main",
@@ -1482,7 +1482,7 @@
       "file_type": "code",
       "norm_label": "_celsius_to_fahrenheit()",
       "source_file": "backend/data/weather.py",
-      "source_location": "L173"
+      "source_location": "L203"
     },
     {
       "id": "backend_data_weather_fetch_nws_observed_temperature",
@@ -1494,7 +1494,7 @@
       "file_type": "code",
       "norm_label": "fetch_nws_observed_temperature()",
       "source_file": "backend/data/weather.py",
-      "source_location": "L262"
+      "source_location": "L292"
     },
     {
       "id": "frontend_src_api_fetchdashboard",
@@ -1566,7 +1566,7 @@
       "file_type": "code",
       "norm_label": "app()",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L135"
+      "source_location": "L138"
     },
     {
       "id": "frontend_src_app_cityradarfallback",
@@ -1590,7 +1590,7 @@
       "file_type": "code",
       "norm_label": "liveclock()",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L81"
+      "source_location": "L84"
     },
     {
       "id": "frontend_src_app_refreshbar",
@@ -1602,7 +1602,7 @@
       "file_type": "code",
       "norm_label": "refreshbar()",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L116"
+      "source_location": "L119"
     },
     {
       "id": "frontend_src_app_windowpill",
@@ -1614,7 +1614,7 @@
       "file_type": "code",
       "norm_label": "windowpill()",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L94"
+      "source_location": "L97"
     },
     {
       "id": "frontend_src_components_calibrationpanel_calibrationpanel",
@@ -2070,7 +2070,7 @@
       "file_type": "code",
       "norm_label": ".ensemble_agreement()",
       "source_file": "backend/data/weather.py",
-      "source_location": "L154"
+      "source_location": "L184"
     },
     {
       "id": "backend_data_weather_ensembleforecast_post_init",
@@ -2082,7 +2082,7 @@
       "file_type": "code",
       "norm_label": ".__post_init__()",
       "source_file": "backend/data/weather.py",
-      "source_location": "L102"
+      "source_location": "L132"
     },
     {
       "id": "backend_data_weather_ensembleforecast_probability_high_above",
@@ -2094,7 +2094,7 @@
       "file_type": "code",
       "norm_label": ".probability_high_above()",
       "source_file": "backend/data/weather.py",
-      "source_location": "L111"
+      "source_location": "L141"
     },
     {
       "id": "backend_data_weather_ensembleforecast_probability_high_below",
@@ -2106,7 +2106,7 @@
       "file_type": "code",
       "norm_label": ".probability_high_below()",
       "source_file": "backend/data/weather.py",
-      "source_location": "L118"
+      "source_location": "L148"
     },
     {
       "id": "backend_data_weather_ensembleforecast_probability_high_between",
@@ -2118,7 +2118,7 @@
       "file_type": "code",
       "norm_label": ".probability_high_between()",
       "source_file": "backend/data/weather.py",
-      "source_location": "L125"
+      "source_location": "L155"
     },
     {
       "id": "backend_data_weather_ensembleforecast_probability_low_above",
@@ -2130,7 +2130,7 @@
       "file_type": "code",
       "norm_label": ".probability_low_above()",
       "source_file": "backend/data/weather.py",
-      "source_location": "L132"
+      "source_location": "L162"
     },
     {
       "id": "backend_data_weather_ensembleforecast_probability_low_below",
@@ -2142,7 +2142,7 @@
       "file_type": "code",
       "norm_label": ".probability_low_below()",
       "source_file": "backend/data/weather.py",
-      "source_location": "L139"
+      "source_location": "L169"
     },
     {
       "id": "backend_data_weather_ensembleforecast_probability_low_between",
@@ -2154,7 +2154,7 @@
       "file_type": "code",
       "norm_label": ".probability_low_between()",
       "source_file": "backend/data/weather.py",
-      "source_location": "L146"
+      "source_location": "L176"
     },
     {
       "id": "test_c137_quant_testc137quantitativecore_test_weather_no_edge_spread_and_bracket_agreement",
@@ -2874,7 +2874,7 @@
       "file_type": "code",
       "norm_label": "globeview()",
       "source_file": "frontend/src/components/GlobeView.tsx",
-      "source_location": "L30"
+      "source_location": "L33"
     },
     {
       "id": "frontend_src_components_weatherpanel_agreementbar",
@@ -3558,7 +3558,7 @@
       "file_type": "code",
       "norm_label": "fetch_polymarket_weather_markets()",
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L153"
+      "source_location": "L160"
     },
     {
       "id": "frontend_src_components_signalstable_categorybadge",
@@ -4257,7 +4257,7 @@
       "source_location": "L1"
     },
     {
-      "id": "backend_data_kalshi_markets_rationale_115",
+      "id": "backend_data_kalshi_markets_rationale_121",
       "label": "Extract price in dollars supporting both legacy cents and updated _dollars\u2026",
       "_origin": "ast",
       "community": 0,
@@ -4265,10 +4265,10 @@
       "file_type": "rationale",
       "norm_label": "extract price in dollars supporting both legacy cents and updated _dollars...",
       "source_file": "backend/data/kalshi_markets.py",
-      "source_location": "L115"
+      "source_location": "L121"
     },
     {
-      "id": "backend_data_kalshi_markets_rationale_134",
+      "id": "backend_data_kalshi_markets_rationale_140",
       "label": "Fetch open weather temperature markets from Kalshi. Queries the KXHIGH{city}\u2026",
       "_origin": "ast",
       "community": 0,
@@ -4276,10 +4276,10 @@
       "file_type": "rationale",
       "norm_label": "fetch open weather temperature markets from kalshi. queries the kxhigh{city}...",
       "source_file": "backend/data/kalshi_markets.py",
-      "source_location": "L134"
+      "source_location": "L140"
     },
     {
-      "id": "backend_data_kalshi_markets_rationale_42",
+      "id": "backend_data_kalshi_markets_rationale_48",
       "label": "Parse a Kalshi weather market using native API fields (strike_type,\u2026",
       "_origin": "ast",
       "community": 0,
@@ -4287,7 +4287,7 @@
       "file_type": "rationale",
       "norm_label": "parse a kalshi weather market using native api fields (strike_type,...",
       "source_file": "backend/data/kalshi_markets.py",
-      "source_location": "L42"
+      "source_location": "L48"
     },
     {
       "id": "backend_data_weather_markets_rationale_1",
@@ -4301,7 +4301,7 @@
       "source_location": "L1"
     },
     {
-      "id": "backend_data_weather_markets_rationale_120",
+      "id": "backend_data_weather_markets_rationale_127",
       "label": "Extract a date from market title text.",
       "_origin": "ast",
       "community": 0,
@@ -4309,10 +4309,10 @@
       "file_type": "rationale",
       "norm_label": "extract a date from market title text.",
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L120"
+      "source_location": "L127"
     },
     {
-      "id": "backend_data_weather_markets_rationale_222",
+      "id": "backend_data_weather_markets_rationale_229",
       "label": "Parse a Polymarket market dict into a WeatherMarket if it's a temp market.",
       "_origin": "ast",
       "community": 0,
@@ -4320,10 +4320,10 @@
       "file_type": "rationale",
       "norm_label": "parse a polymarket market dict into a weathermarket if it's a temp market.",
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L222"
+      "source_location": "L229"
     },
     {
-      "id": "backend_data_weather_markets_rationale_57",
+      "id": "backend_data_weather_markets_rationale_64",
       "label": "Parse a weather market title to extract city, threshold, metric, date. Handles\u2026",
       "_origin": "ast",
       "community": 0,
@@ -4331,10 +4331,10 @@
       "file_type": "rationale",
       "norm_label": "parse a weather market title to extract city, threshold, metric, date. handles...",
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L57"
+      "source_location": "L64"
     },
     {
-      "id": "backend_data_weather_rationale_178",
+      "id": "backend_data_weather_rationale_208",
       "label": "Fetch ensemble forecast from Open-Meteo Ensemble API (free, 31-member GFS).\u2026",
       "_origin": "ast",
       "community": 0,
@@ -4342,7 +4342,7 @@
       "file_type": "rationale",
       "norm_label": "fetch ensemble forecast from open-meteo ensemble api (free, 31-member gfs)....",
       "source_file": "backend/data/weather.py",
-      "source_location": "L178"
+      "source_location": "L208"
     },
     {
       "id": "test_kalshi_demo_rationale_2",
@@ -4598,7 +4598,7 @@
       "source_location": "L1"
     },
     {
-      "id": "backend_data_weather_rationale_263",
+      "id": "backend_data_weather_rationale_293",
       "label": "Fetch observed temperature from NWS API for settlement. Returns dict with\u2026",
       "_origin": "ast",
       "community": 1,
@@ -4606,7 +4606,7 @@
       "file_type": "rationale",
       "norm_label": "fetch observed temperature from nws api for settlement. returns dict with...",
       "source_file": "backend/data/weather.py",
-      "source_location": "L263"
+      "source_location": "L293"
     },
     {
       "id": "frontend_src_app",
@@ -5478,84 +5478,7 @@
       "source_location": "L20"
     },
     {
-      "id": "backend_data_weather_rationale_112",
-      "label": "Fraction of ensemble members with daily high above integer threshold (NWS +0.5F\u2026",
-      "_origin": "ast",
-      "community": 19,
-      "community_name": "EnsembleForecast",
-      "file_type": "rationale",
-      "norm_label": "fraction of ensemble members with daily high above integer threshold (nws +0.5f...",
-      "source_file": "backend/data/weather.py",
-      "source_location": "L112"
-    },
-    {
       "id": "backend_data_weather_rationale_119",
-      "label": "Fraction of ensemble members with daily high below integer threshold (NWS -0.5F\u2026",
-      "_origin": "ast",
-      "community": 19,
-      "community_name": "EnsembleForecast",
-      "file_type": "rationale",
-      "norm_label": "fraction of ensemble members with daily high below integer threshold (nws -0.5f...",
-      "source_file": "backend/data/weather.py",
-      "source_location": "L119"
-    },
-    {
-      "id": "backend_data_weather_rationale_126",
-      "label": "Fraction of ensemble members with daily high between floor_f and cap_f [floor_f\u2026",
-      "_origin": "ast",
-      "community": 19,
-      "community_name": "EnsembleForecast",
-      "file_type": "rationale",
-      "norm_label": "fraction of ensemble members with daily high between floor_f and cap_f [floor_f...",
-      "source_file": "backend/data/weather.py",
-      "source_location": "L126"
-    },
-    {
-      "id": "backend_data_weather_rationale_133",
-      "label": "Fraction of ensemble members with daily low above integer threshold (NWS +0.5F\u2026",
-      "_origin": "ast",
-      "community": 19,
-      "community_name": "EnsembleForecast",
-      "file_type": "rationale",
-      "norm_label": "fraction of ensemble members with daily low above integer threshold (nws +0.5f...",
-      "source_file": "backend/data/weather.py",
-      "source_location": "L133"
-    },
-    {
-      "id": "backend_data_weather_rationale_140",
-      "label": "Fraction of ensemble members with daily low below integer threshold (NWS -0.5F\u2026",
-      "_origin": "ast",
-      "community": 19,
-      "community_name": "EnsembleForecast",
-      "file_type": "rationale",
-      "norm_label": "fraction of ensemble members with daily low below integer threshold (nws -0.5f...",
-      "source_file": "backend/data/weather.py",
-      "source_location": "L140"
-    },
-    {
-      "id": "backend_data_weather_rationale_147",
-      "label": "Fraction of ensemble members with daily low between floor_f and cap_f [floor_f\u2026",
-      "_origin": "ast",
-      "community": 19,
-      "community_name": "EnsembleForecast",
-      "file_type": "rationale",
-      "norm_label": "fraction of ensemble members with daily low between floor_f and cap_f [floor_f...",
-      "source_file": "backend/data/weather.py",
-      "source_location": "L147"
-    },
-    {
-      "id": "backend_data_weather_rationale_155",
-      "label": "How one-sided the ensemble is (0.5 = split, 1.0 = unanimous).",
-      "_origin": "ast",
-      "community": 19,
-      "community_name": "EnsembleForecast",
-      "file_type": "rationale",
-      "norm_label": "how one-sided the ensemble is (0.5 = split, 1.0 = unanimous).",
-      "source_file": "backend/data/weather.py",
-      "source_location": "L155"
-    },
-    {
-      "id": "backend_data_weather_rationale_89",
       "label": "Ensemble weather forecast with per-member data.",
       "_origin": "ast",
       "community": 19,
@@ -5563,7 +5486,84 @@
       "file_type": "rationale",
       "norm_label": "ensemble weather forecast with per-member data.",
       "source_file": "backend/data/weather.py",
-      "source_location": "L89"
+      "source_location": "L119"
+    },
+    {
+      "id": "backend_data_weather_rationale_142",
+      "label": "Fraction of ensemble members with daily high above integer threshold (NWS +0.5F\u2026",
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "EnsembleForecast",
+      "file_type": "rationale",
+      "norm_label": "fraction of ensemble members with daily high above integer threshold (nws +0.5f...",
+      "source_file": "backend/data/weather.py",
+      "source_location": "L142"
+    },
+    {
+      "id": "backend_data_weather_rationale_149",
+      "label": "Fraction of ensemble members with daily high below integer threshold (NWS -0.5F\u2026",
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "EnsembleForecast",
+      "file_type": "rationale",
+      "norm_label": "fraction of ensemble members with daily high below integer threshold (nws -0.5f...",
+      "source_file": "backend/data/weather.py",
+      "source_location": "L149"
+    },
+    {
+      "id": "backend_data_weather_rationale_156",
+      "label": "Fraction of ensemble members with daily high between floor_f and cap_f [floor_f\u2026",
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "EnsembleForecast",
+      "file_type": "rationale",
+      "norm_label": "fraction of ensemble members with daily high between floor_f and cap_f [floor_f...",
+      "source_file": "backend/data/weather.py",
+      "source_location": "L156"
+    },
+    {
+      "id": "backend_data_weather_rationale_163",
+      "label": "Fraction of ensemble members with daily low above integer threshold (NWS +0.5F\u2026",
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "EnsembleForecast",
+      "file_type": "rationale",
+      "norm_label": "fraction of ensemble members with daily low above integer threshold (nws +0.5f...",
+      "source_file": "backend/data/weather.py",
+      "source_location": "L163"
+    },
+    {
+      "id": "backend_data_weather_rationale_170",
+      "label": "Fraction of ensemble members with daily low below integer threshold (NWS -0.5F\u2026",
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "EnsembleForecast",
+      "file_type": "rationale",
+      "norm_label": "fraction of ensemble members with daily low below integer threshold (nws -0.5f...",
+      "source_file": "backend/data/weather.py",
+      "source_location": "L170"
+    },
+    {
+      "id": "backend_data_weather_rationale_177",
+      "label": "Fraction of ensemble members with daily low between floor_f and cap_f [floor_f\u2026",
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "EnsembleForecast",
+      "file_type": "rationale",
+      "norm_label": "fraction of ensemble members with daily low between floor_f and cap_f [floor_f...",
+      "source_file": "backend/data/weather.py",
+      "source_location": "L177"
+    },
+    {
+      "id": "backend_data_weather_rationale_185",
+      "label": "How one-sided the ensemble is (0.5 = split, 1.0 = unanimous).",
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "EnsembleForecast",
+      "file_type": "rationale",
+      "norm_label": "how one-sided the ensemble is (0.5 = split, 1.0 = unanimous).",
+      "source_file": "backend/data/weather.py",
+      "source_location": "L185"
     },
     {
       "id": "test_c137_quant_rationale_359",
@@ -7194,7 +7194,7 @@
       "source_location": "L44"
     },
     {
-      "id": "backend_data_weather_markets_rationale_37",
+      "id": "backend_data_weather_markets_rationale_44",
       "label": "A weather temperature prediction market.",
       "_origin": "ast",
       "community": 37,
@@ -7202,7 +7202,7 @@
       "file_type": "rationale",
       "norm_label": "a weather temperature prediction market.",
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L37"
+      "source_location": "L44"
     },
     {
       "id": "test_c137_quant_rationale_1",
@@ -8100,7 +8100,7 @@
       "source_location": "L316"
     },
     {
-      "id": "backend_data_weather_markets_rationale_154",
+      "id": "backend_data_weather_markets_rationale_161",
       "label": "Search Polymarket for weather temperature markets. Searches for\u2026",
       "_origin": "ast",
       "community": 53,
@@ -8108,7 +8108,7 @@
       "file_type": "rationale",
       "norm_label": "search polymarket for weather temperature markets. searches for...",
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L154"
+      "source_location": "L161"
     },
     {
       "id": "frontend_src_components_signalstable",
@@ -9153,6 +9153,18 @@
       "type": "external"
     },
     {
+      "id": "fastapi_staticfiles",
+      "label": "fastapi_staticfiles",
+      "_origin": "semantic",
+      "community": 44,
+      "community_name": "api/main.py",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "fastapi_staticfiles",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "pydantic",
       "label": "pydantic",
       "_origin": "semantic",
@@ -9161,6 +9173,18 @@
       "external": true,
       "file_type": "concept",
       "norm_label": "pydantic",
+      "source_file": "",
+      "type": "external"
+    },
+    {
+      "id": "starlette_responses",
+      "label": "starlette_responses",
+      "_origin": "semantic",
+      "community": 44,
+      "community_name": "api/main.py",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "starlette_responses",
       "source_file": "",
       "type": "external"
     },
@@ -9281,28 +9305,6 @@
       "external": true,
       "file_type": "concept",
       "norm_label": "json",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "fastapi_staticfiles",
-      "label": "fastapi_staticfiles",
-      "community": 44,
-      "community_name": "api/main.py",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "fastapi_staticfiles",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "starlette_responses",
-      "label": "starlette_responses",
-      "community": 44,
-      "community_name": "api/main.py",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "starlette_responses",
       "source_file": "",
       "type": "external"
     }
@@ -11573,7 +11575,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/data/kalshi_markets.py",
-      "source_location": "L144",
+      "source_location": "L150",
       "weight": 1.0
     },
     {
@@ -11585,7 +11587,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/data/kalshi_markets.py",
-      "source_location": "L173",
+      "source_location": "L179",
       "weight": 1.0
     },
     {
@@ -11597,7 +11599,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/data/kalshi_markets.py",
-      "source_location": "L180",
+      "source_location": "L186",
       "weight": 1.0
     },
     {
@@ -11609,7 +11611,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/data/kalshi_markets.py",
-      "source_location": "L214",
+      "source_location": "L220",
       "weight": 1.0
     },
     {
@@ -11621,7 +11623,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/data/kalshi_markets.py",
-      "source_location": "L52",
+      "source_location": "L58",
       "weight": 1.0
     },
     {
@@ -11669,7 +11671,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/data/weather.py",
-      "source_location": "L190",
+      "source_location": "L220",
       "weight": 1.0
     },
     {
@@ -11681,7 +11683,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/data/weather.py",
-      "source_location": "L199",
+      "source_location": "L229",
       "weight": 1.0
     },
     {
@@ -11693,7 +11695,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/data/weather.py",
-      "source_location": "L242",
+      "source_location": "L272",
       "weight": 1.0
     },
     {
@@ -11705,7 +11707,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/data/weather.py",
-      "source_location": "L275",
+      "source_location": "L305",
       "weight": 1.0
     },
     {
@@ -11717,7 +11719,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/data/weather.py",
-      "source_location": "L282",
+      "source_location": "L312",
       "weight": 1.0
     },
     {
@@ -11729,7 +11731,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/data/weather.py",
-      "source_location": "L308",
+      "source_location": "L338",
       "weight": 1.0
     },
     {
@@ -11741,7 +11743,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L127",
+      "source_location": "L134",
       "weight": 1.0
     },
     {
@@ -11753,7 +11755,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L161",
+      "source_location": "L168",
       "weight": 1.0
     },
     {
@@ -11765,7 +11767,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L179",
+      "source_location": "L186",
       "weight": 1.0
     },
     {
@@ -11777,7 +11779,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L227",
+      "source_location": "L234",
       "weight": 1.0
     },
     {
@@ -11789,7 +11791,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L265",
+      "source_location": "L272",
       "weight": 1.0
     },
     {
@@ -11801,7 +11803,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L105",
+      "source_location": "L112",
       "weight": 1.0
     },
     {
@@ -11813,7 +11815,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L87",
+      "source_location": "L94",
       "weight": 1.0
     },
     {
@@ -11837,7 +11839,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L255",
+      "source_location": "L258",
       "weight": 1.0
     },
     {
@@ -11849,7 +11851,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L265",
+      "source_location": "L268",
       "weight": 1.0
     },
     {
@@ -11861,7 +11863,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L285",
+      "source_location": "L288",
       "weight": 1.0
     },
     {
@@ -11873,7 +11875,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L298",
+      "source_location": "L301",
       "weight": 1.0
     },
     {
@@ -11885,7 +11887,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L313",
+      "source_location": "L316",
       "weight": 1.0
     },
     {
@@ -11897,7 +11899,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L319",
+      "source_location": "L322",
       "weight": 1.0
     },
     {
@@ -11909,7 +11911,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L335",
+      "source_location": "L338",
       "weight": 1.0
     },
     {
@@ -11921,7 +11923,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L335",
+      "source_location": "L338",
       "weight": 1.0
     },
     {
@@ -11933,7 +11935,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L341",
+      "source_location": "L344",
       "weight": 1.0
     },
     {
@@ -11945,7 +11947,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L362",
+      "source_location": "L365",
       "weight": 1.0
     },
     {
@@ -11957,7 +11959,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L374",
+      "source_location": "L377",
       "weight": 1.0
     },
     {
@@ -11969,7 +11971,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L389",
+      "source_location": "L392",
       "weight": 1.0
     },
     {
@@ -11981,7 +11983,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L409",
+      "source_location": "L412",
       "weight": 1.0
     },
     {
@@ -11993,7 +11995,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L425",
+      "source_location": "L428",
       "weight": 1.0
     },
     {
@@ -12005,7 +12007,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L437",
+      "source_location": "L440",
       "weight": 1.0
     },
     {
@@ -12017,7 +12019,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L111",
+      "source_location": "L114",
       "weight": 1.0
     },
     {
@@ -13721,7 +13723,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "backend/data/weather.py",
-      "source_location": "L177",
+      "source_location": "L207",
       "weight": 1.0
     },
     {
@@ -13733,7 +13735,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "backend/data/weather.py",
-      "source_location": "L262",
+      "source_location": "L292",
       "weight": 1.0
     },
     {
@@ -13745,7 +13747,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L119",
+      "source_location": "L126",
       "weight": 1.0
     },
     {
@@ -13757,7 +13759,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L153",
+      "source_location": "L160",
       "weight": 1.0
     },
     {
@@ -20320,7 +20322,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/kalshi_markets.py",
-      "source_location": "L114",
+      "source_location": "L120",
       "weight": 1.0
     },
     {
@@ -20331,7 +20333,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/kalshi_markets.py",
-      "source_location": "L131",
+      "source_location": "L137",
       "weight": 1.0
     },
     {
@@ -20342,7 +20344,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/kalshi_markets.py",
-      "source_location": "L41",
+      "source_location": "L47",
       "weight": 1.0
     },
     {
@@ -20380,13 +20382,24 @@
     },
     {
       "source": "backend_data_weather",
+      "target": "backend_data_weather_ensembleforecast",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/data/weather.py",
+      "source_location": "L118",
+      "weight": 1.0
+    },
+    {
+      "source": "backend_data_weather",
       "target": "backend_data_weather_celsius_to_fahrenheit",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather.py",
-      "source_location": "L173",
+      "source_location": "L203",
       "weight": 1.0
     },
     {
@@ -20397,7 +20410,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather.py",
-      "source_location": "L177",
+      "source_location": "L207",
       "weight": 1.0
     },
     {
@@ -20408,18 +20421,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather.py",
-      "source_location": "L262",
-      "weight": 1.0
-    },
-    {
-      "source": "backend_data_weather",
-      "target": "backend_data_weather_ensembleforecast",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "backend/data/weather.py",
-      "source_location": "L88",
+      "source_location": "L292",
       "weight": 1.0
     },
     {
@@ -20430,7 +20432,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L119",
+      "source_location": "L126",
       "weight": 1.0
     },
     {
@@ -20441,7 +20443,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L153",
+      "source_location": "L160",
       "weight": 1.0
     },
     {
@@ -20452,7 +20454,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L217",
+      "source_location": "L224",
       "weight": 1.0
     },
     {
@@ -20463,7 +20465,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L36",
+      "source_location": "L43",
       "weight": 1.0
     },
     {
@@ -20474,7 +20476,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L56",
+      "source_location": "L63",
       "weight": 1.0
     },
     {
@@ -21156,7 +21158,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L116",
+      "source_location": "L119",
       "weight": 1.0
     },
     {
@@ -21167,7 +21169,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L135",
+      "source_location": "L138",
       "weight": 1.0
     },
     {
@@ -21200,7 +21202,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L81",
+      "source_location": "L84",
       "weight": 1.0
     },
     {
@@ -21211,7 +21213,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L94",
+      "source_location": "L97",
       "weight": 1.0
     },
     {
@@ -21431,7 +21433,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "frontend/src/components/GlobeView.tsx",
-      "source_location": "L30",
+      "source_location": "L33",
       "weight": 1.0
     },
     {
@@ -23583,7 +23585,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather.py",
-      "source_location": "L102",
+      "source_location": "L132",
       "weight": 1.0
     },
     {
@@ -23594,7 +23596,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather.py",
-      "source_location": "L111",
+      "source_location": "L141",
       "weight": 1.0
     },
     {
@@ -23605,7 +23607,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather.py",
-      "source_location": "L118",
+      "source_location": "L148",
       "weight": 1.0
     },
     {
@@ -23616,7 +23618,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather.py",
-      "source_location": "L125",
+      "source_location": "L155",
       "weight": 1.0
     },
     {
@@ -23627,7 +23629,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather.py",
-      "source_location": "L132",
+      "source_location": "L162",
       "weight": 1.0
     },
     {
@@ -23638,7 +23640,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather.py",
-      "source_location": "L139",
+      "source_location": "L169",
       "weight": 1.0
     },
     {
@@ -23649,7 +23651,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather.py",
-      "source_location": "L146",
+      "source_location": "L176",
       "weight": 1.0
     },
     {
@@ -23660,7 +23662,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather.py",
-      "source_location": "L154",
+      "source_location": "L184",
       "weight": 1.0
     },
     {
@@ -25512,36 +25514,36 @@
       "weight": 1.0
     },
     {
-      "source": "backend_data_kalshi_markets_rationale_115",
+      "source": "backend_data_kalshi_markets_rationale_121",
       "target": "backend_data_kalshi_markets_extract_price",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/kalshi_markets.py",
-      "source_location": "L115",
+      "source_location": "L121",
       "weight": 1.0
     },
     {
-      "source": "backend_data_kalshi_markets_rationale_134",
+      "source": "backend_data_kalshi_markets_rationale_140",
       "target": "backend_data_kalshi_markets_fetch_kalshi_weather_markets",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/kalshi_markets.py",
-      "source_location": "L134",
+      "source_location": "L140",
       "weight": 1.0
     },
     {
-      "source": "backend_data_kalshi_markets_rationale_42",
+      "source": "backend_data_kalshi_markets_rationale_48",
       "target": "backend_data_kalshi_markets_parse_kalshi_market",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/kalshi_markets.py",
-      "source_location": "L42",
+      "source_location": "L48",
       "weight": 1.0
     },
     {
@@ -25600,58 +25602,58 @@
       "weight": 1.0
     },
     {
-      "source": "backend_data_weather_markets_rationale_120",
+      "source": "backend_data_weather_markets_rationale_127",
       "target": "backend_data_weather_markets_extract_date",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L120",
+      "source_location": "L127",
       "weight": 1.0
     },
     {
-      "source": "backend_data_weather_markets_rationale_154",
+      "source": "backend_data_weather_markets_rationale_161",
       "target": "backend_data_weather_markets_fetch_polymarket_weather_markets",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L154",
+      "source_location": "L161",
       "weight": 1.0
     },
     {
-      "source": "backend_data_weather_markets_rationale_222",
+      "source": "backend_data_weather_markets_rationale_229",
       "target": "backend_data_weather_markets_parse_polymarket_weather",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L222",
+      "source_location": "L229",
       "weight": 1.0
     },
     {
-      "source": "backend_data_weather_markets_rationale_37",
+      "source": "backend_data_weather_markets_rationale_44",
       "target": "backend_data_weather_markets_weathermarket",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L37",
+      "source_location": "L44",
       "weight": 1.0
     },
     {
-      "source": "backend_data_weather_markets_rationale_57",
+      "source": "backend_data_weather_markets_rationale_64",
       "target": "backend_data_weather_markets_parse_weather_market_title",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather_markets.py",
-      "source_location": "L57",
+      "source_location": "L64",
       "weight": 1.0
     },
     {
@@ -25666,19 +25668,8 @@
       "weight": 1.0
     },
     {
-      "source": "backend_data_weather_rationale_112",
-      "target": "backend_data_weather_ensembleforecast_probability_high_above",
-      "relation": "rationale_for",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "backend/data/weather.py",
-      "source_location": "L112",
-      "weight": 1.0
-    },
-    {
       "source": "backend_data_weather_rationale_119",
-      "target": "backend_data_weather_ensembleforecast_probability_high_below",
+      "target": "backend_data_weather_ensembleforecast",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -25688,91 +25679,102 @@
       "weight": 1.0
     },
     {
-      "source": "backend_data_weather_rationale_126",
+      "source": "backend_data_weather_rationale_142",
+      "target": "backend_data_weather_ensembleforecast_probability_high_above",
+      "relation": "rationale_for",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/data/weather.py",
+      "source_location": "L142",
+      "weight": 1.0
+    },
+    {
+      "source": "backend_data_weather_rationale_149",
+      "target": "backend_data_weather_ensembleforecast_probability_high_below",
+      "relation": "rationale_for",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/data/weather.py",
+      "source_location": "L149",
+      "weight": 1.0
+    },
+    {
+      "source": "backend_data_weather_rationale_156",
       "target": "backend_data_weather_ensembleforecast_probability_high_between",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather.py",
-      "source_location": "L126",
+      "source_location": "L156",
       "weight": 1.0
     },
     {
-      "source": "backend_data_weather_rationale_133",
+      "source": "backend_data_weather_rationale_163",
       "target": "backend_data_weather_ensembleforecast_probability_low_above",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather.py",
-      "source_location": "L133",
+      "source_location": "L163",
       "weight": 1.0
     },
     {
-      "source": "backend_data_weather_rationale_140",
+      "source": "backend_data_weather_rationale_170",
       "target": "backend_data_weather_ensembleforecast_probability_low_below",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather.py",
-      "source_location": "L140",
+      "source_location": "L170",
       "weight": 1.0
     },
     {
-      "source": "backend_data_weather_rationale_147",
+      "source": "backend_data_weather_rationale_177",
       "target": "backend_data_weather_ensembleforecast_probability_low_between",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather.py",
-      "source_location": "L147",
+      "source_location": "L177",
       "weight": 1.0
     },
     {
-      "source": "backend_data_weather_rationale_155",
+      "source": "backend_data_weather_rationale_185",
       "target": "backend_data_weather_ensembleforecast_ensemble_agreement",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather.py",
-      "source_location": "L155",
+      "source_location": "L185",
       "weight": 1.0
     },
     {
-      "source": "backend_data_weather_rationale_178",
+      "source": "backend_data_weather_rationale_208",
       "target": "backend_data_weather_fetch_ensemble_forecast",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather.py",
-      "source_location": "L178",
+      "source_location": "L208",
       "weight": 1.0
     },
     {
-      "source": "backend_data_weather_rationale_263",
+      "source": "backend_data_weather_rationale_293",
       "target": "backend_data_weather_fetch_nws_observed_temperature",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/data/weather.py",
-      "source_location": "L263",
-      "weight": 1.0
-    },
-    {
-      "source": "backend_data_weather_rationale_89",
-      "target": "backend_data_weather_ensembleforecast",
-      "relation": "rationale_for",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "backend/data/weather.py",
-      "source_location": "L89",
+      "source_location": "L293",
       "weight": 1.0
     },
     {
@@ -26220,7 +26222,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L140",
+      "source_location": "L143",
       "weight": 1.0
     },
     {
@@ -26232,7 +26234,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L145",
+      "source_location": "L148",
       "weight": 1.0
     },
     {
@@ -26244,7 +26246,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L150",
+      "source_location": "L153",
       "weight": 1.0
     },
     {
@@ -26256,7 +26258,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L155",
+      "source_location": "L158",
       "weight": 1.0
     },
     {
@@ -26268,7 +26270,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "frontend/src/App.tsx",
-      "source_location": "L160",
+      "source_location": "L163",
       "weight": 1.0
     },
     {
@@ -27100,5 +27102,5 @@
       "source_file": "README.md"
     }
   ],
-  "built_at_commit": "80844b865f70f8f2ee1178874bd7bae63cea76ab"
+  "built_at_commit": "47189abc069ff1865824b4b13bcf2a4b5d2b10df"
 }

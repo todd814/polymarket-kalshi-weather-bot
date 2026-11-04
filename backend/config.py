@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     AI_DAILY_BUDGET_USD: float = 1.0
 
     # Bot settings - BTC 5-MIN TRADING
+    BTC_ENABLED: bool = False  # Permanently disabled - 5m BTC has negative edge and noisy flow
     SIMULATION_MODE: bool = True
     INITIAL_BANKROLL: float = 99.53
     KELLY_FRACTION: float = 0.15  # Fractional Kelly

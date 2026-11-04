@@ -48,9 +48,9 @@
     "semantic_hash": ""
   },
   "backend/config.py": {
-    "mtime": 1793376869.7882438,
-    "seen": 1793454302.227096,
-    "ast_hash": "71e2692f49ade93976bddea485e55222",
+    "mtime": 1793811166.9433155,
+    "seen": 1793811700.172647,
+    "ast_hash": "533af2c660929b1c03a01346ecde51cf",
     "semantic_hash": ""
   },
   "backend/core/__init__.py": {
@@ -108,9 +108,9 @@
     "semantic_hash": ""
   },
   "backend/data/kalshi_markets.py": {
-    "mtime": 1793280552.5789242,
-    "seen": 1793454302.227103,
-    "ast_hash": "557b4f3692cc8fd929f75807701636cc",
+    "mtime": 1793811160.4321637,
+    "seen": 1793811700.172655,
+    "ast_hash": "2c57cab1d6ea9d1cab704a7ce5562cc7",
     "semantic_hash": ""
   },
   "backend/data/markets.py": {
@@ -120,15 +120,15 @@
     "semantic_hash": "6cc69d48daef4bd97b5ed31bd275e55e"
   },
   "backend/data/weather.py": {
-    "mtime": 1793203179.4023893,
-    "seen": 1793454302.2271051,
-    "ast_hash": "4d4e2ead98ac5f2e2b230ce7a6f8f958",
+    "mtime": 1793811153.1370463,
+    "seen": 1793811700.172657,
+    "ast_hash": "fccc72a78d4de36e6ee380288fa369d2",
     "semantic_hash": ""
   },
   "backend/data/weather_markets.py": {
-    "mtime": 1793203179.4646637,
-    "seen": 1793454302.2271051,
-    "ast_hash": "03af9573cc69bab66704430187a0d05e",
+    "mtime": 1793811138.4459808,
+    "seen": 1793811700.172657,
+    "ast_hash": "15fdcbf7eb07b937d78915f97fcf4f0c",
     "semantic_hash": ""
   },
   "backend/models/__init__.py": {
@@ -156,9 +156,9 @@
     "semantic_hash": "ef3ba2a81ba19f8ea5ddf625521e96f0"
   },
   "frontend/src/App.tsx": {
-    "mtime": 1793380061.238316,
-    "seen": 1793454302.22711,
-    "ast_hash": "86974206f6ac537ea909e4af41df0d2b",
+    "mtime": 1793811183.9481082,
+    "seen": 1793811700.172662,
+    "ast_hash": "e5fe6ca04d69f0d5af4bd61eaa54b801",
     "semantic_hash": ""
   },
   "frontend/src/api.ts": {
@@ -192,9 +192,9 @@
     "semantic_hash": "34b5b8965d4ac07530ffa4a2441272dc"
   },
   "frontend/src/components/GlobeView.tsx": {
-    "mtime": 1793203179.4781837,
-    "seen": 1793454302.227115,
-    "ast_hash": "a65fde51d04d6e7b2bbb92f093002dcd",
+    "mtime": 1793811188.8811495,
+    "seen": 1793811700.1726668,
+    "ast_hash": "4932ede850cf28f7eb14500450e7e0c6",
     "semantic_hash": ""
   },
   "frontend/src/components/MicrostructurePanel.tsx": {
