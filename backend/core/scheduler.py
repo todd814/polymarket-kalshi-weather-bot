@@ -533,7 +533,8 @@ def start_scheduler():
             max_instances=1
         )
 
-        # Check settlements every 2 minutes
+    # Check settlements for all active markets (BTC and Daily Weather)
+    if settings.BTC_ENABLED or settings.WEATHER_ENABLED:
         scheduler.add_job(
             settlement_job,
             IntervalTrigger(seconds=settle_seconds),

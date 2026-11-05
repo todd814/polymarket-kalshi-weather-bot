@@ -187,18 +187,18 @@ async def check_weather_settlement(trade: Trade, db: Optional[Session] = None) -
     Routes to the correct platform's resolution method, falling back to official NWS resolution.
     """
     platform = getattr(trade, 'platform', 'polymarket') or 'polymarket'
+    ticker = getattr(trade, 'market_ticker', '') or ''
 
-    if platform == "kalshi":
+    if platform == "kalshi" or ticker.startswith("KX"):
         is_resolved, settlement_value = await _fetch_kalshi_resolution(trade.market_ticker)
     else:
         is_resolved, settlement_value = await fetch_polymarket_resolution(
             trade.market_ticker,
             event_slug=trade.event_slug,
         )
-
-    # Fallback to official NWS observation resolution if platform resolution is delayed/pending
-    if not is_resolved or settlement_value is None:
-        is_resolved, settlement_value = await _fetch_nws_resolution(trade, db=db)
+        # NWS fallback only for Polymarket weather contracts where resolution can lag
+        if not is_resolved or settlement_value is None:
+            is_resolved, settlement_value = await _fetch_nws_resolution(trade, db=db)
 
     if is_resolved and settlement_value is not None:
         pnl = calculate_pnl(trade, settlement_value)
@@ -352,9 +352,11 @@ async def settle_pending_trades(db: Session) -> List[Trade]:
 
     for trade in pending:
         try:
-            # Route settlement by market type
+            # Route settlement by market type and platform
             market_type = getattr(trade, 'market_type', 'btc') or 'btc'
-            if market_type == "weather":
+            platform = getattr(trade, 'platform', 'polymarket') or 'polymarket'
+            ticker = getattr(trade, 'market_ticker', '') or ''
+            if market_type in ("weather", "weather_hourly") or platform == "kalshi" or ticker.startswith("KX"):
                 is_settled, settlement_value, pnl = await check_weather_settlement(trade, db=db)
             else:
                 is_settled, settlement_value, pnl = await check_market_settlement(trade)
