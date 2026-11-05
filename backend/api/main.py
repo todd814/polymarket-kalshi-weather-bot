@@ -529,15 +529,67 @@ async def get_equity_curve(is_paper: bool = False, db: Session = Depends(get_db)
 async def simulate_trade(signal_ticker: str, db: Session = Depends(get_db)):
     from backend.core.scheduler import log_event
 
+    state = db.query(BotState).first()
+    if not state:
+        raise HTTPException(status_code=500, detail="Bot state not initialized")
+
+    # 1. Check Hourly Weather Signals (Kalshi Synoptic series e.g. KXTEMPNYCHS, KXTEMPMIAH)
+    if "KXTEMP" in signal_ticker.upper():
+        from backend.core.hourly_signals import scan_for_hourly_signals
+        hourly_signals = await scan_for_hourly_signals()
+        h_sig = next((s for s in hourly_signals if s.market.ticker == signal_ticker), None)
+        if h_sig:
+            trade = Trade(
+                market_ticker=h_sig.market.ticker,
+                platform="kalshi",
+                event_slug=h_sig.market.series_ticker,
+                market_type="weather_hourly",
+                direction=h_sig.direction,
+                entry_price=h_sig.market_price,
+                size=h_sig.suggested_size or 5.0,
+                model_probability=h_sig.model_probability,
+                market_price_at_entry=h_sig.market_price,
+                edge_at_entry=h_sig.edge,
+                is_paper=True,
+                settled=False
+            )
+            db.add(trade)
+            db.commit()
+            log_event("trade", f"Manual 1H Paper Trade: {h_sig.direction.upper()} ${trade.size:.2f} on {h_sig.market.ticker}")
+            return {"status": "ok", "trade_id": trade.id, "size": trade.size}
+
+    # 2. Check Daily Weather Signals (Kalshi / Polymarket e.g. KXHIGHNY, KXHIGHCHI)
+    if settings.WEATHER_ENABLED:
+        from backend.core.weather_signals import scan_for_weather_signals
+        wx_signals = await scan_for_weather_signals()
+        wx_sig = next((s for s in wx_signals if s.market.market_id == signal_ticker), None)
+        if wx_sig:
+            entry_price = wx_sig.market.yes_price if wx_sig.direction == "yes" else wx_sig.market.no_price
+            trade = Trade(
+                market_ticker=wx_sig.market.market_id,
+                platform=getattr(wx_sig.market, "platform", "kalshi"),
+                event_slug=wx_sig.market.slug,
+                market_type="weather",
+                direction=wx_sig.direction,
+                entry_price=entry_price,
+                size=min(wx_sig.suggested_size or 5.0, settings.WEATHER_MAX_TRADE_SIZE),
+                model_probability=wx_sig.model_probability,
+                market_price_at_entry=wx_sig.market_probability,
+                edge_at_entry=wx_sig.edge,
+                is_paper=True,
+                settled=False
+            )
+            db.add(trade)
+            db.commit()
+            log_event("trade", f"Manual Daily Paper Trade: {wx_sig.direction.upper()} ${trade.size:.2f} on {wx_sig.market.market_id}")
+            return {"status": "ok", "trade_id": trade.id, "size": trade.size}
+
+    # 3. Fallback to BTC signals (if enabled)
     signals = await scan_for_signals()
     signal = next((s for s in signals if s.market.market_id == signal_ticker), None)
 
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
-
-    state = db.query(BotState).first()
-    if not state:
-        raise HTTPException(status_code=500, detail="Bot state not initialized")
 
     entry_price = signal.market.up_price if signal.direction == "up" else signal.market.down_price
 
