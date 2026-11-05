@@ -209,44 +209,20 @@ async def hourly_settlement_job():
             except Exception as e:
                 logger.warning(f"Error fetching batch Kalshi settlement: {e}")
 
-        # 2. Lazy fetch METAR observations as fallback
-        metar_map = None
-
         settled_count = 0
         for trade in eligible_trades:
             ticker = trade.market_ticker
             outcome_hit = None
-            settlement_source = "unknown"
             final_metric_val = None
 
-            # Path A: Official Kalshi finalized result
+            # Only official Kalshi finalized results are accepted for settlement.
+            # No third-party or external observation guesswork.
             k_market = kalshi_markets.get(ticker)
             if k_market and k_market.get("status") == "finalized" and k_market.get("result") in ["yes", "no"]:
                 outcome_hit = (k_market["result"].lower() == "yes")
-                settlement_source = "kalshi_official"
                 final_metric_val = k_market.get("expiration_value")
 
-            # Path B: Fallback to METAR surface observation
-            if outcome_hit is None:
-                city_key = get_city_for_ticker(ticker)
-                if city_key:
-                    if metar_map is None:
-                        metar_map = await fetch_metar_observations(force_refresh=True)
-                    station = CITY_STATIONS.get(city_key)
-                    obs = metar_map.get(station) if station else None
-                    if obs:
-                        match = re.search(r'-([TB])(-?[\d.]+)$', ticker)
-                        if match:
-                            threshold_f = float(match.group(2))
-                            is_above_contract = (match.group(1) == "T")
-                            final_t = obs.temp_f
-                            if is_above_contract:
-                                outcome_hit = (final_t >= threshold_f)
-                            else:
-                                outcome_hit = (final_t < threshold_f)
-                            settlement_source = f"metar_{station}"
-                            final_metric_val = final_t
-
+            # If Kalshi exchange has not officially finalized the market yet, defer to next cycle
             if outcome_hit is None:
                 continue
 
@@ -274,7 +250,7 @@ async def hourly_settlement_job():
 
             settled_count += 1
             logger.info(
-                f"[HOURLY SETTLED via {settlement_source}] {trade.market_ticker}: {trade.result.upper()} "
+                f"[HOURLY SETTLED via kalshi_official] {trade.market_ticker}: {trade.result.upper()} "
                 f"(Val: {final_metric_val}) -> PnL: ${pnl:+.2f}"
             )
 

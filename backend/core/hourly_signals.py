@@ -3,13 +3,27 @@ import logging
 import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 from backend.config import settings
 from backend.data.hourly_markets import HourlyMarket, fetch_kalshi_hourly_markets
 from backend.data.metar import MetarObservation, fetch_metar_observations, CITY_STATIONS
 
 logger = logging.getLogger("trading_bot")
+
+CITY_TIMEZONES = {
+    "nyc": "America/New_York",
+    "chicago": "America/Chicago",
+    "miami": "America/New_York",
+    "los_angeles": "America/Los_Angeles",
+    "denver": "America/Denver",
+    "austin": "America/Chicago",
+    "houston": "America/Chicago",
+    "washington_dc": "America/New_York",
+    "boston": "America/New_York",
+    "philadelphia": "America/New_York",
+}
 
 
 def _normal_cdf(x: float) -> float:
@@ -20,7 +34,7 @@ def _normal_cdf(x: float) -> float:
 def _estimate_diurnal_drift_per_hour(local_hour: int) -> float:
     """
     Estimate physical diurnal temperature change rate (°F per hour)
-    based on typical solar cycle.
+    based on local solar time.
     """
     if 7 <= local_hour < 11:
         return 1.5   # Rapid morning solar heating
@@ -34,6 +48,76 @@ def _estimate_diurnal_drift_per_hour(local_hour: int) -> float:
         return -0.8  # Evening cooling
     else:
         return -0.3  # Nocturnal baseline drift
+
+
+def compute_coastal_drift_and_sigma(
+    city_key: str,
+    local_hour: int,
+    base_drift: float,
+    current_temp_f: float,
+    dewpoint_f: Optional[float],
+    wind_speed_kt: Optional[float],
+    wind_dir_deg: Optional[int],
+    hours_to_close: float,
+) -> Tuple[float, float, str]:
+    """
+    Adjust thermal drift rate (°F/hr) and Gaussian uncertainty (sigma) based on
+    real-time METAR boundary layer indicators:
+    - Pacific onshore marine layer at LAX
+    - Tropical Atlantic humidity damping at MIA
+    - Dewpoint depression (fog / stratus saturation ceiling)
+    """
+    drift = base_drift
+    sigma = max(0.4, 1.1 * math.sqrt(hours_to_close))
+    notes = []
+
+    dewp_depression = (current_temp_f - dewpoint_f) if dewpoint_f is not None else 10.0
+
+    if city_key == "los_angeles":
+        # LAX / Santa Monica Bay Marine Layer Model:
+        # Typical sea surface temp off LAX is 58-62°F.
+        # Onshore Pacific wind: 210° (SSW) to 300° (WNW)
+        is_onshore = (wind_dir_deg is not None and 210 <= wind_dir_deg <= 300)
+        has_breeze = (wind_speed_kt is not None and wind_speed_kt >= 4.0)
+
+        if is_onshore and has_breeze:
+            notes.append(f"Onshore {wind_dir_deg}°@{wind_speed_kt:.0f}kt marine surge")
+            if 11 <= local_hour < 16:
+                drift = min(drift, 0.0)  # Afternoon sea breeze halts warming
+            elif 16 <= local_hour < 21:
+                if current_temp_f > 62.0:
+                    drift = -1.8  # Accelerated coastal marine cooling
+            sigma = max(0.6, 1.4 * math.sqrt(hours_to_close))
+
+        elif wind_dir_deg is not None and (30 <= wind_dir_deg <= 90):
+            notes.append(f"Offshore {wind_dir_deg}° dry flow")
+            sigma = max(0.4, 1.0 * math.sqrt(hours_to_close))
+
+        if dewp_depression <= 3.0:
+            notes.append("Marine fog/stratus ceiling (T-Td<=3°F)")
+            drift = drift * 0.3
+            sigma = max(0.3, 0.8 * math.sqrt(hours_to_close))
+
+    elif city_key == "miami":
+        # Tropical maritime environment: large thermal inertia from moisture
+        drift = drift * 0.65
+        notes.append("Tropical high-humidity damping (0.65x)")
+
+        # Atlantic sea breeze (060° to 120°)
+        if wind_dir_deg is not None and 60 <= wind_dir_deg <= 120 and wind_speed_kt and wind_speed_kt >= 5.0:
+            notes.append(f"Atlantic sea breeze {wind_dir_deg}°@{wind_speed_kt:.0f}kt")
+            if 12 <= local_hour < 17:
+                drift = min(drift, 0.2)
+
+        sigma = max(0.5, 1.25 * math.sqrt(hours_to_close))
+
+    elif city_key in ("nyc", "boston", "philadelphia"):
+        if wind_dir_deg is not None and 60 <= wind_dir_deg <= 160 and wind_speed_kt and wind_speed_kt >= 7.0:
+            notes.append(f"Atlantic maritime flow {wind_dir_deg}°")
+            if drift > 0:
+                drift = drift * 0.7
+
+    return drift, sigma, ("; ".join(notes) if notes else "standard continental drift")
 
 
 @dataclass
@@ -56,8 +140,8 @@ class HourlySignal:
 
     @property
     def passes_threshold(self) -> bool:
-        """Check if edge meets the hourly hurdle threshold."""
-        hurdle = getattr(settings, "HOURLY_MIN_EDGE_THRESHOLD", 0.05)
+        """Check if edge meets the hourly hurdle threshold (higher hurdle for coastal stations)."""
+        hurdle = 0.08 if self.market.city_key in ("los_angeles", "miami") else getattr(settings, "HOURLY_MIN_EDGE_THRESHOLD", 0.05)
         return self.edge >= hurdle and self.suggested_size > 0.0
 
 
@@ -66,23 +150,39 @@ def evaluate_hourly_market(
     metar: MetarObservation
 ) -> Optional[HourlySignal]:
     """
-    Evaluate an hourly temperature contract using real-time METAR nowcasting.
+    Evaluate an hourly temperature contract using real-time METAR nowcasting
+    and coastal microclimate boundary layer modeling.
     """
     minutes_rem = market.minutes_remaining
     if minutes_rem < 3.0 or minutes_rem > 180.0:
         return None  # Only trade contracts between 3 minutes and 3 hours out
 
     current_t = metar.temp_f
-    # Local hour approximation from close_time
-    local_hour = market.close_time.hour  # approximate local solar cycle
 
-    drift_rate = _estimate_diurnal_drift_per_hour(local_hour)
+    # Convert UTC close_time to actual local solar time
+    tz_name = CITY_TIMEZONES.get(market.city_key, "UTC")
+    try:
+        local_close_time = market.close_time.astimezone(ZoneInfo(tz_name))
+        local_hour = local_close_time.hour
+    except Exception:
+        local_hour = market.close_time.hour
+
     hours_to_close = minutes_rem / 60.0
-    expected_t = round(current_t + drift_rate * hours_to_close, 2)
+    base_drift = _estimate_diurnal_drift_per_hour(local_hour)
 
-    # Uncertainty increases with square root of remaining time
-    # 15 mins out: sigma ~ 0.6°F | 60 mins out: sigma ~ 1.2°F | 120 mins out: sigma ~ 1.7°F
-    sigma = max(0.5, 1.2 * math.sqrt(hours_to_close))
+    # Adjust drift and sigma using coastal boundary layer and wind/moisture physics
+    drift_rate, sigma, micro_notes = compute_coastal_drift_and_sigma(
+        city_key=market.city_key,
+        local_hour=local_hour,
+        base_drift=base_drift,
+        current_temp_f=current_t,
+        dewpoint_f=metar.dewpoint_f,
+        wind_speed_kt=metar.wind_speed_kt,
+        wind_dir_deg=metar.wind_dir_deg,
+        hours_to_close=hours_to_close,
+    )
+
+    expected_t = round(current_t + drift_rate * hours_to_close, 2)
 
     # Calculate z-score relative to strike
     z = (expected_t - market.threshold_f) / sigma
@@ -123,7 +223,6 @@ def evaluate_hourly_market(
         return None
 
     # Sizing via fractional Kelly (15% Kelly)
-    # b = payout odds = (1.0 - market_price) / market_price
     win_prob = model_prob if best_direction == "yes" else (1.0 - model_prob)
     loss_prob = 1.0 - win_prob
     b = (1.0 - market_price) / market_price if market_price > 0 else 1.0
@@ -132,12 +231,12 @@ def evaluate_hourly_market(
     max_size = getattr(settings, "HOURLY_MAX_TRADE_SIZE", 5.0)
     suggested_size = round(min(kelly * 0.15 * 50.0, max_size), 2)
     if suggested_size < 1.0 and best_edge >= 0.05:
-        suggested_size = 1.0  # Minimum 1 contract test size
+        suggested_size = 1.0
 
     temp_diff = round(current_t - market.threshold_f, 2)
     reasoning = (
-        f"METAR {metar.station_id} @ {current_t}°F (diff: {temp_diff:+.1f}°F). "
-        f"Expected @ close: {expected_t}°F (sigma: {sigma:.1f}°F, {minutes_rem:.0f}m left). "
+        f"METAR {metar.station_id} @ {current_t}°F (diff: {temp_diff:+.1f}°F, local {local_hour:02d}:00). "
+        f"Expected @ close: {expected_t}°F (drift: {drift_rate:+.1f}°F/h, sigma: {sigma:.1f}°F, {minutes_rem:.0f}m left | {micro_notes}). "
         f"Model {best_direction.upper()}: {win_prob:.1%} vs Ask {market_price:.1%} (Edge: {best_edge:+.1%})"
     )
 
@@ -178,12 +277,12 @@ async def scan_for_hourly_signals(
     signals: List[HourlySignal] = []
     for m in markets:
         station = CITY_STATIONS.get(m.city_key)
-        obs = metar_map.get(station)
-        if not obs:
+        if not station or station not in metar_map:
             continue
-
+        obs = metar_map[station]
         sig = evaluate_hourly_market(m, obs)
         if sig:
             signals.append(sig)
 
+    signals.sort(key=lambda s: abs(s.edge), reverse=True)
     return signals
