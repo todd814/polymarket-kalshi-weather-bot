@@ -2,7 +2,9 @@
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import List
+import re
+from typing import Dict, List, Optional
+import httpx
 
 from backend.config import settings
 from backend.core.hourly_signals import scan_for_hourly_signals, HourlySignal
@@ -10,6 +12,54 @@ from backend.data.metar import fetch_metar_observations, CITY_STATIONS
 from backend.models.database import SessionLocal, Trade, Signal, BotState
 
 logger = logging.getLogger("trading_bot")
+
+MONTH_MAP = {
+    "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
+    "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12
+}
+
+CITY_CODE_MAP = {
+    "NYC": "nyc",
+    "CHI": "chicago",
+    "LAX": "los_angeles",
+    "MIA": "miami",
+    "AUS": "austin",
+    "DEN": "denver",
+    "HOU": "houston",
+    "DCA": "washington_dc",
+    "WDC": "washington_dc",
+    "BOS": "boston",
+    "PHL": "philadelphia",
+}
+
+
+def parse_expiry_from_ticker(ticker: str) -> Optional[datetime]:
+    """Parse UTC expiry datetime from ticker like KXTEMPCHIHS-26NOV0414-T57.99"""
+    m = re.search(r'-(\d{2})([A-Z]{3})(\d{2})(\d{2})-', ticker)
+    if not m:
+        return None
+    try:
+        year = 2000 + int(m.group(1))
+        month = MONTH_MAP.get(m.group(2).upper())
+        day = int(m.group(3))
+        hour = int(m.group(4))
+        if not month:
+            return None
+        return datetime(year, month, day, hour, 0, 0, tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+def get_city_for_ticker(ticker: str) -> Optional[str]:
+    """Extract standard city_key from Kalshi ticker using airport and metro codes."""
+    t_upper = ticker.upper()
+    for code, city in CITY_CODE_MAP.items():
+        if code in t_upper:
+            return city
+    for city, st in CITY_STATIONS.items():
+        if city.upper() in t_upper or st.upper() in t_upper:
+            return city
+    return None
 
 
 async def hourly_scan_and_trade_job():
@@ -104,7 +154,8 @@ async def hourly_scan_and_trade_job():
 
 async def hourly_settlement_job():
     """
-    Background job: Settle completed hourly weather contracts using official METAR reports.
+    Background job: Settle completed hourly weather contracts using official Kalshi finalization
+    with METAR observation fallback.
     """
     if not getattr(settings, "HOURLY_WEATHER_ENABLED", True):
         return
@@ -112,7 +163,6 @@ async def hourly_settlement_job():
     db = SessionLocal()
     try:
         now = datetime.now(timezone.utc)
-        # Query unsettled hourly paper trades
         pending_trades = db.query(Trade).filter(
             Trade.market_type == "weather_hourly",
             Trade.settled == False
@@ -121,47 +171,84 @@ async def hourly_settlement_job():
         if not pending_trades:
             return
 
-        # Fetch latest METAR observations for verification
-        metar_map = await fetch_metar_observations(force_refresh=True)
-
+        # Filter trades whose contract close time has arrived
+        eligible_trades: List[Trade] = []
         for trade in pending_trades:
-            # We determine city from ticker or event_slug
-            city_key = None
-            ticker = trade.market_ticker
-            for c, st in CITY_STATIONS.items():
-                if c in ticker.lower() or st.lower() in ticker.lower():
-                    city_key = c
-                    break
-
-            if not city_key:
-                continue
-
-            station = CITY_STATIONS.get(city_key)
-            obs = metar_map.get(station)
-            if not obs:
-                continue
-
-            # Check if close_time has passed
-            # Ticker format typically has timestamp or we check signal timestamp + 1h
-            trade_age_seconds = (datetime.utcnow() - trade.timestamp).total_seconds()
-            if trade_age_seconds < 3600:  # Minimum 1 hour before attempting settlement
-                continue
-
-            # Settlement logic: compare current terminal METAR temperature vs threshold
-            # Extract threshold from market_ticker (e.g. -T79.99)
-            import re
-            match = re.search(r'-([TB])(-?[\d.]+)$', ticker)
-            if not match:
-                continue
-
-            threshold_f = float(match.group(2))
-            is_above_contract = (match.group(1) == "T")
-
-            final_t = obs.temp_f
-            if is_above_contract:
-                outcome_hit = (final_t >= threshold_f)
+            expiry_dt = parse_expiry_from_ticker(trade.market_ticker)
+            if expiry_dt:
+                # Settle if close time has arrived
+                if now >= expiry_dt:
+                    eligible_trades.append(trade)
             else:
-                outcome_hit = (final_t < threshold_f)
+                trade_age_seconds = (datetime.utcnow() - trade.timestamp).total_seconds()
+                if trade_age_seconds >= 3600:
+                    eligible_trades.append(trade)
+
+        if not eligible_trades:
+            return
+
+        logger.info(f"Checking hourly settlement for {len(eligible_trades)} eligible contracts...")
+
+        # 1. Batch query Kalshi official finalization status
+        kalshi_markets: Dict[str, dict] = {}
+        unique_tickers = list({t.market_ticker for t in eligible_trades})
+
+        for i in range(0, len(unique_tickers), 50):
+            chunk = unique_tickers[i:i + 50]
+            tickers_param = ",".join(chunk)
+            url = f"https://api.elections.kalshi.com/trade-api/v2/markets?tickers={tickers_param}"
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as http_client:
+                    resp = await http_client.get(url, headers={"User-Agent": "WeatherBot/2.0"})
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        for m in data.get("markets", []):
+                            t = m.get("ticker")
+                            if t:
+                                kalshi_markets[t] = m
+            except Exception as e:
+                logger.warning(f"Error fetching batch Kalshi settlement: {e}")
+
+        # 2. Lazy fetch METAR observations as fallback
+        metar_map = None
+
+        settled_count = 0
+        for trade in eligible_trades:
+            ticker = trade.market_ticker
+            outcome_hit = None
+            settlement_source = "unknown"
+            final_metric_val = None
+
+            # Path A: Official Kalshi finalized result
+            k_market = kalshi_markets.get(ticker)
+            if k_market and k_market.get("status") == "finalized" and k_market.get("result") in ["yes", "no"]:
+                outcome_hit = (k_market["result"].lower() == "yes")
+                settlement_source = "kalshi_official"
+                final_metric_val = k_market.get("expiration_value")
+
+            # Path B: Fallback to METAR surface observation
+            if outcome_hit is None:
+                city_key = get_city_for_ticker(ticker)
+                if city_key:
+                    if metar_map is None:
+                        metar_map = await fetch_metar_observations(force_refresh=True)
+                    station = CITY_STATIONS.get(city_key)
+                    obs = metar_map.get(station) if station else None
+                    if obs:
+                        match = re.search(r'-([TB])(-?[\d.]+)$', ticker)
+                        if match:
+                            threshold_f = float(match.group(2))
+                            is_above_contract = (match.group(1) == "T")
+                            final_t = obs.temp_f
+                            if is_above_contract:
+                                outcome_hit = (final_t >= threshold_f)
+                            else:
+                                outcome_hit = (final_t < threshold_f)
+                            settlement_source = f"metar_{station}"
+                            final_metric_val = final_t
+
+            if outcome_hit is None:
+                continue
 
             # Did our trade win?
             if trade.direction == "yes":
@@ -185,12 +272,15 @@ async def hourly_settlement_job():
                     sig.outcome_correct = trade_won
                     sig.settled_at = datetime.utcnow()
 
+            settled_count += 1
             logger.info(
-                f"[HOURLY SETTLED] {trade.market_ticker}: {trade.result.upper()} "
-                f"(Final METAR {obs.station_id}: {final_t}°F vs {threshold_f}°F) -> PnL: ${pnl:+.2f}"
+                f"[HOURLY SETTLED via {settlement_source}] {trade.market_ticker}: {trade.result.upper()} "
+                f"(Val: {final_metric_val}) -> PnL: ${pnl:+.2f}"
             )
 
-        db.commit()
+        if settled_count > 0:
+            db.commit()
+            logger.info(f"Successfully settled {settled_count} hourly contracts.")
     except Exception as e:
         logger.error(f"Error in hourly_settlement_job: {e}", exc_info=True)
     finally:
