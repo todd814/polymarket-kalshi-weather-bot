@@ -1,10 +1,10 @@
 import { useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import type { Signal, WeatherSignal } from '../types'
+import type { WeatherSignal, HourlySignal } from '../types'
 
 interface Props {
-  btcSignals: Signal[]
-  weatherSignals: WeatherSignal[]
+  dailySignals: WeatherSignal[]
+  hourlySignals: HourlySignal[]
 }
 
 const BUCKETS = ['0-2%', '2-5%', '5-10%', '10-20%', '20%+']
@@ -21,8 +21,8 @@ function getBucket(edge: number): string {
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload || !payload.length) return null
   return (
-    <div className="bg-neutral-900 border border-neutral-800 px-2 py-1.5">
-      <p className="text-[10px] text-neutral-400 mb-1">{label}</p>
+    <div className="bg-neutral-900 border border-neutral-800 px-2 py-1.5 font-mono">
+      <p className="text-[10px] text-neutral-400 mb-1">{label} Edge</p>
       {payload.map((p: any) => (
         <p key={p.name} className="text-[10px] tabular-nums" style={{ color: p.color }}>
           {p.name}: {p.value}
@@ -32,33 +32,33 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   )
 }
 
-export function EdgeDistribution({ btcSignals, weatherSignals }: Props) {
+export function EdgeDistribution({ dailySignals, hourlySignals }: Props) {
   const data = useMemo(() => {
-    const counts: Record<string, { btc: number; weather: number }> = {}
-    BUCKETS.forEach(b => { counts[b] = { btc: 0, weather: 0 } })
+    const counts: Record<string, { daily: number; hourly: number }> = {}
+    BUCKETS.forEach(b => { counts[b] = { daily: 0, hourly: 0 } })
 
-    btcSignals.forEach(s => {
+    dailySignals.forEach(s => {
       const bucket = getBucket(s.edge)
-      counts[bucket].btc++
+      counts[bucket].daily++
     })
 
-    weatherSignals.forEach(s => {
+    hourlySignals.forEach(s => {
       const bucket = getBucket(s.edge)
-      counts[bucket].weather++
+      counts[bucket].hourly++
     })
 
     return BUCKETS.map(bucket => ({
       bucket,
-      BTC: counts[bucket].btc,
-      WX: counts[bucket].weather,
+      'Daily WX': counts[bucket].daily,
+      'Hourly WX': counts[bucket].hourly,
     }))
-  }, [btcSignals, weatherSignals])
+  }, [dailySignals, hourlySignals])
 
-  const total = btcSignals.length + weatherSignals.length
+  const total = dailySignals.length + hourlySignals.length
   if (total === 0) {
     return (
-      <div className="h-full flex items-center justify-center text-neutral-600 text-[10px]">
-        No signals for distribution
+      <div className="h-full flex items-center justify-center text-neutral-600 text-[10px] font-mono">
+        Scanning active weather edges...
       </div>
     )
   }
@@ -89,8 +89,8 @@ export function EdgeDistribution({ btcSignals, weatherSignals }: Props) {
             iconSize={8}
             wrapperStyle={{ fontSize: '9px', fontFamily: 'JetBrains Mono' }}
           />
-          <Bar dataKey="BTC" stackId="a" fill="#d97706" radius={[0, 0, 0, 0]} />
-          <Bar dataKey="WX" stackId="a" fill="#06b6d4" radius={[2, 2, 0, 0]} />
+          <Bar dataKey="Daily WX" stackId="a" fill="#06b6d4" radius={[0, 0, 0, 0]} />
+          <Bar dataKey="Hourly WX" stackId="a" fill="#f59e0b" radius={[2, 2, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

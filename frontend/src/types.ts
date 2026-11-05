@@ -130,6 +130,35 @@ export interface WeatherSignal {
   platform?: string
 }
 
+export interface MetarObservation {
+  station_id: string
+  city_key: string
+  temp_c: number
+  temp_f: number
+  dewpoint_f: number
+  wind_speed_kt: number
+  report_time: string | null
+  age_seconds: number
+  raw_ob: string
+}
+
+export interface HourlySignal {
+  ticker: string
+  series_ticker: string
+  city_key: string
+  threshold_f: number
+  direction: string
+  current_temp_f: number
+  expected_temp_f: number
+  minutes_to_close: number
+  model_probability: number
+  market_price: number
+  edge: number
+  actionable: boolean
+  suggested_size: number
+  reasoning: string
+}
+
 export interface DashboardData {
   stats: BotStats
   btc_price: BtcPrice | null

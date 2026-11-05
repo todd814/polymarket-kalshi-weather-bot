@@ -1,19 +1,17 @@
 import { useState, useEffect, Suspense, lazy } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { fetchDashboard, runScan, simulateTrade, startBot, stopBot } from './api'
+import { fetchDashboard, runScan, simulateTrade, startBot, stopBot, fetchMetar, fetchHourlySignals } from './api'
 import { StatsCards } from './components/StatsCards'
 import { SignalsTable } from './components/SignalsTable'
 import { TradesTable } from './components/TradesTable'
 import { EquityChart } from './components/EquityChart'
 import { Terminal } from './components/Terminal'
-import { MicrostructurePanel } from './components/MicrostructurePanel'
 import { CalibrationPanel } from './components/CalibrationPanel'
 import { WeatherPanel } from './components/WeatherPanel'
 import { EdgeDistribution } from './components/EdgeDistribution'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import { formatCountdown } from './utils'
-import type { BtcWindow, WeatherForecast, WeatherSignal } from './types'
+import type { WeatherForecast, WeatherSignal, MetarObservation, HourlySignal } from './types'
 
 const GlobeView = lazy(() => import('./components/GlobeView').then(m => ({ default: m.GlobeView })))
 
@@ -34,15 +32,15 @@ function CityRadarFallback({ forecasts, signals }: { forecasts: WeatherForecast[
   return (
     <div className="w-full h-full bg-neutral-950 p-4 flex flex-col justify-between overflow-y-auto">
       <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
-        <span className="text-[11px] font-bold tracking-widest text-neutral-400 uppercase">
+        <span className="text-[11px] font-bold tracking-widest text-neutral-400 uppercase font-mono">
           Station Radar [Hardware Fallback Mode]
         </span>
-        <span className="text-[9px] text-cyan-400 bg-cyan-950/40 border border-cyan-800/40 px-1.5 py-0.5 uppercase">
-          7 Stations Active
+        <span className="text-[9px] text-cyan-400 bg-cyan-950/40 border border-cyan-800/40 px-1.5 py-0.5 uppercase font-mono">
+          10 Stations Monitored
         </span>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 my-auto py-2">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 my-auto py-2">
         {CITIES.map(c => {
           const fc = forecasts.find(f => f.city_key === c.key)
           const citySignals = signals.filter(s => s.city_key === c.key)
@@ -50,11 +48,11 @@ function CityRadarFallback({ forecasts, signals }: { forecasts: WeatherForecast[
           const actionable = citySignals.some(s => s.actionable)
 
           return (
-            <div key={c.key} className={`p-2 border ${actionable ? 'border-green-500/40 bg-green-950/10' : 'border-neutral-800 bg-neutral-900/40'}`}>
+            <div key={c.key} className={`p-2 border font-mono ${actionable ? 'border-cyan-500/40 bg-cyan-950/10' : 'border-neutral-800 bg-neutral-900/40'}`}>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[11px] font-bold text-neutral-200">{c.code}</span>
                 {actionable ? (
-                  <span className="text-[8px] font-bold text-green-400 bg-green-950/60 border border-green-500/40 px-1">EDGE</span>
+                  <span className="text-[8px] font-bold text-cyan-400 bg-cyan-950/60 border border-cyan-500/40 px-1">EDGE</span>
                 ) : (
                   <span className="text-[8px] text-neutral-500">IDLE</span>
                 )}
@@ -73,45 +71,137 @@ function CityRadarFallback({ forecasts, signals }: { forecasts: WeatherForecast[
         })}
       </div>
 
-      <div className="text-[9px] text-neutral-600 flex items-center justify-between border-t border-neutral-900 pt-1">
-        <span>WebGL 3D globe bypassed &mdash; quant terminal operating normally</span>
-        <span>Open-Meteo + Kalshi Feed</span>
+      <div className="text-[9px] text-neutral-600 flex items-center justify-between border-t border-neutral-900 pt-1 font-mono">
+        <span>Station nowcasting engine active &mdash; sub-100ms METAR feeds</span>
+        <span>AviationWeather.gov + Open-Meteo</span>
       </div>
     </div>
   )
 }
 
-function LiveClock() {
-  const [time, setTime] = useState(new Date())
+function MetarLiveTicker({ observations }: { observations: Record<string, MetarObservation> }) {
+  const stations = Object.values(observations)
+  const [index, setIndex] = useState(0)
+
   useEffect(() => {
-    const interval = setInterval(() => setTime(new Date()), 1000)
-    return () => clearInterval(interval)
-  }, [])
+    if (stations.length <= 1) return
+    const timer = setInterval(() => {
+      setIndex(prev => (prev + 1) % stations.length)
+    }, 3500)
+    return () => clearInterval(timer)
+  }, [stations.length])
+
+  if (stations.length === 0) {
+    return (
+      <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-neutral-900 border border-neutral-800 text-[10px] font-mono text-neutral-500">
+          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400/40 animate-pulse" />
+          <span>METAR SYNCING...</span>
+        </div>
+      </div>
+    )
+  }
+
+  const current = stations[index]
+
   return (
-    <span className="text-xs tabular-nums text-neutral-400">
-      {time.toLocaleTimeString('en-US', { hour12: false })}
-    </span>
+    <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-2 px-2.5 py-1 bg-neutral-900/80 border border-neutral-800 rounded-sm font-mono">
+        <div className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+          <span className="text-[9px] font-bold text-cyan-400 uppercase tracking-wider">
+            METAR NOWCAST
+          </span>
+        </div>
+        <span className="text-neutral-700 text-xs">|</span>
+        <span className="text-xs font-bold tabular-nums text-neutral-100">
+          {current.station_id} {current.temp_f.toFixed(1)}°F
+        </span>
+        <span className="text-[9px] text-neutral-500 tabular-nums">
+          {current.wind_speed_kt}kt · {current.age_seconds < 60 ? `${Math.round(current.age_seconds)}s ago` : `${Math.round(current.age_seconds / 60)}m ago`}
+        </span>
+        <span className="text-[8px] px-1 py-0.2 bg-neutral-800 text-neutral-400 uppercase rounded">
+          {index + 1}/{stations.length}
+        </span>
+      </div>
+    </div>
   )
 }
 
-function WindowPill({ window: w }: { window: BtcWindow }) {
-  const [countdown, setCountdown] = useState(w.time_until_end)
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCountdown(prev => Math.max(0, prev - 1))
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [w.time_until_end])
+function HourlyWindowPill({ signal, onSimulateTrade, isSimulating }: {
+  signal: HourlySignal
+  onSimulateTrade?: () => void
+  isSimulating?: boolean
+}) {
+  const isUp = signal.direction.toLowerCase() === 'yes' || signal.direction.toLowerCase() === 'above'
+  const diff = signal.current_temp_f - signal.threshold_f
+  const diffFormatted = diff >= 0 ? `+${diff.toFixed(1)}°F` : `${diff.toFixed(1)}°F`
 
   return (
-    <div className={`flex items-center gap-2 px-2 py-1 border shrink-0 ${w.is_active ? 'border-amber-500/30 bg-amber-500/5' : 'border-neutral-800 bg-neutral-900/50'}`}>
-      {w.is_active && <span className="text-[9px] font-bold text-amber-400 uppercase">Live</span>}
-      {w.is_upcoming && <span className="text-[9px] font-medium text-blue-400 uppercase">Next</span>}
-      <span className="text-[10px] tabular-nums text-green-400">{(w.up_price * 100).toFixed(0)}c</span>
-      <span className="text-neutral-600 text-[10px]">/</span>
-      <span className="text-[10px] tabular-nums text-red-400">{(w.down_price * 100).toFixed(0)}c</span>
-      <span className="text-[10px] tabular-nums text-neutral-500">{formatCountdown(countdown)}</span>
+    <div className={`p-1.5 border font-mono text-[10px] ${
+      signal.actionable
+        ? 'border-amber-500/40 bg-amber-500/5'
+        : 'border-neutral-800 bg-neutral-900/40'
+    }`}>
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] font-bold text-neutral-200">
+            {signal.city_key.toUpperCase()}
+          </span>
+          <span className="text-[9px] text-neutral-500">
+            {signal.threshold_f}°F
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] text-neutral-500 tabular-nums">
+            {signal.minutes_to_close.toFixed(0)}m left
+          </span>
+          {signal.actionable && (
+            <span className="text-[8px] font-bold text-amber-400 bg-amber-950/60 border border-amber-500/40 px-1 uppercase">
+              EDGE
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between text-[9px] mb-1">
+        <span className="text-neutral-400">
+          METAR: <span className="text-neutral-200 font-bold">{signal.current_temp_f.toFixed(1)}°F</span>
+          <span className={`ml-1 ${diff >= 0 ? 'text-green-400' : 'text-cyan-400'}`}>({diffFormatted})</span>
+        </span>
+        <span className="text-neutral-400">
+          Exp: <span className="text-neutral-200 font-bold">{signal.expected_temp_f.toFixed(1)}°F</span>
+        </span>
+      </div>
+
+      <div className="flex items-center justify-between pt-1 border-t border-neutral-800/60">
+        <div className="flex items-center gap-1.5">
+          <span className={`font-bold uppercase ${isUp ? 'text-green-400' : 'text-red-400'}`}>
+            {signal.direction}
+          </span>
+          <span className="text-neutral-500 tabular-nums">
+            Mkt {(signal.market_price * 100).toFixed(0)}¢
+          </span>
+          <span className="text-neutral-500">/</span>
+          <span className="text-neutral-400 tabular-nums">
+            Mod {(signal.model_probability * 100).toFixed(0)}%
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className={`font-bold tabular-nums ${signal.edge >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {signal.edge >= 0 ? '+' : ''}{(signal.edge * 100).toFixed(1)}%
+          </span>
+          {signal.actionable && onSimulateTrade && (
+            <button
+              onClick={onSimulateTrade}
+              disabled={isSimulating}
+              className="px-1 py-0.2 bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[8px] uppercase hover:bg-amber-500/30 disabled:opacity-50"
+            >
+              Trade
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -144,9 +234,25 @@ function App() {
     refetchInterval: 10000,
   })
 
+  const { data: metarData = {} } = useQuery({
+    queryKey: ['metar'],
+    queryFn: fetchMetar,
+    refetchInterval: 15000,
+  })
+
+  const { data: hourlySignals = [] } = useQuery({
+    queryKey: ['hourlySignals'],
+    queryFn: fetchHourlySignals,
+    refetchInterval: 15000,
+  })
+
   const scanMutation = useMutation({
     mutationFn: runScan,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['hourlySignals'] })
+      queryClient.invalidateQueries({ queryKey: ['metar'] })
+    },
   })
 
   const tradeMutation = useMutation({
@@ -164,11 +270,7 @@ function App() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
   })
 
-  const activeSignals = data?.active_signals ?? []
   const recentTrades = data?.recent_trades ?? []
-  const btcPrice = data?.btc_price
-  const micro = data?.microstructure
-  const windows = data?.windows ?? []
   const weatherSignals = data?.weather_signals ?? []
   const weatherForecasts = data?.weather_forecasts ?? []
 
@@ -184,17 +286,17 @@ function App() {
   const equityCurve = data?.equity_curve ?? []
   const calibration = data?.calibration ?? null
 
-  const actionableCount = activeSignals.filter(s => s.actionable).length + weatherSignals.filter(s => s.actionable).length
+  const actionableCount = weatherSignals.filter(s => s.actionable).length + hourlySignals.filter(s => s.actionable).length
 
   if (isLoading) {
     return (
       <div className="h-screen bg-black flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center font-mono">
           <div className="relative w-10 h-10 mx-auto mb-4">
             <div className="absolute inset-0 border-2 border-neutral-800 rounded-full" />
-            <div className="absolute inset-0 border-2 border-transparent border-t-green-500 rounded-full animate-spin" />
+            <div className="absolute inset-0 border-2 border-transparent border-t-cyan-500 rounded-full animate-spin" />
           </div>
-          <div className="text-[10px] text-neutral-500 uppercase tracking-widest font-mono">Initializing</div>
+          <div className="text-[10px] text-neutral-500 uppercase tracking-widest font-mono">Initializing Weather Terminal</div>
         </div>
       </div>
     )
@@ -202,7 +304,7 @@ function App() {
 
   if (error || !data) {
     return (
-      <div className="h-screen bg-black flex items-center justify-center">
+      <div className="h-screen bg-black flex items-center justify-center font-mono">
         <div className="text-center">
           <div className="text-red-500 text-xs uppercase mb-2 tracking-wider">Connection Error</div>
           <button
@@ -217,7 +319,7 @@ function App() {
   }
 
   return (
-    <div className="h-screen bg-black text-neutral-200 flex flex-col overflow-hidden">
+    <div className="h-screen bg-black text-neutral-200 flex flex-col overflow-hidden font-mono">
       {/* ===== HEADER ===== */}
       <motion.header
         initial={{ opacity: 0, y: -10 }}
@@ -228,7 +330,7 @@ function App() {
 
         <div className="flex items-center gap-2 shrink-0">
           <h1 className="text-xs font-bold text-neutral-100 uppercase tracking-widest whitespace-nowrap font-mono">
-            TRADING TERMINAL
+            WEATHER QUANT TERMINAL
           </h1>
           <span className={`px-1.5 py-0.5 text-[9px] font-bold uppercase ${
             stats.is_running
@@ -237,21 +339,13 @@ function App() {
           }`}>
             {stats.is_running ? 'Live' : 'Idle'}
           </span>
-          <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase bg-amber-500/10 text-amber-400 border border-amber-500/20">
-            Sim
+          <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+            Paper + Prod Shadow
           </span>
         </div>
 
-        {btcPrice && (
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-sm font-bold tabular-nums text-neutral-100">
-              ${btcPrice.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-            </span>
-            <span className={`text-[10px] tabular-nums ${btcPrice.change_24h >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-              {btcPrice.change_24h >= 0 ? '+' : ''}{btcPrice.change_24h.toFixed(2)}%
-            </span>
-          </div>
-        )}
+        {/* METAR Live Observation Ticker (Replacing BTC Header Badge) */}
+        <MetarLiveTicker observations={metarData} />
 
         <div className="flex-1" />
 
@@ -263,9 +357,8 @@ function App() {
             disabled={scanMutation.isPending}
             className="px-2.5 py-1 bg-neutral-900 border border-neutral-700 hover:border-neutral-600 text-neutral-300 text-[10px] uppercase tracking-wider transition-colors disabled:opacity-50 whitespace-nowrap"
           >
-            {scanMutation.isPending ? 'Scanning...' : 'Scan'}
+            {scanMutation.isPending ? 'Scanning...' : 'Scan Now'}
           </button>
-          <LiveClock />
         </div>
       </motion.header>
 
@@ -274,27 +367,12 @@ function App() {
 
         {/* ===== LEFT COLUMN ===== */}
         <div className="flex flex-col border-r border-neutral-800 min-h-0 overflow-hidden">
-          {/* Microstructure */}
-          {micro && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="shrink-0 border-b border-neutral-800 px-2 py-2"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] text-neutral-500 uppercase tracking-wider">Microstructure</span>
-                <span className="text-[9px] text-neutral-600 tabular-nums">{micro.source}</span>
-              </div>
-              <MicrostructurePanel micro={micro} />
-            </motion.div>
-          )}
-
           {/* Equity chart */}
-          <div className="border-b border-neutral-800" style={{ height: '28%', minHeight: '120px' }}>
+          <div className="border-b border-neutral-800" style={{ height: '35%', minHeight: '140px' }}>
             <div className="px-2 py-1 border-b border-neutral-800 flex items-center justify-between shrink-0">
-              <span className="text-[10px] text-neutral-500 uppercase tracking-wider">Equity</span>
+              <span className="text-[10px] text-neutral-500 uppercase tracking-wider">Equity Curve</span>
               <span className={`text-[10px] tabular-nums ${stats.total_pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                {stats.total_pnl >= 0 ? '+' : ''}${stats.total_pnl.toFixed(0)}
+                {stats.total_pnl >= 0 ? '+' : ''}${stats.total_pnl.toFixed(2)}
               </span>
             </div>
             <div className="h-[calc(100%-24px)] p-1">
@@ -332,13 +410,13 @@ function App() {
 
         {/* ===== CENTER COLUMN ===== */}
         <div className="flex flex-col min-h-0 border-r border-neutral-800">
-          {/* Globe - top 60% */}
+          {/* Globe - top 58% */}
           <div className="relative" style={{ height: '58%' }}>
             <div className="absolute inset-0">
               <ErrorBoundary fallback={() => <CityRadarFallback forecasts={weatherForecasts} signals={weatherSignals} />}>
                 <Suspense fallback={
                   <div className="w-full h-full flex items-center justify-center bg-black">
-                    <span className="text-[10px] text-neutral-600 uppercase tracking-wider">Loading Globe...</span>
+                    <span className="text-[10px] text-neutral-600 uppercase tracking-wider font-mono">Loading Globe...</span>
                   </div>
                 }>
                   <GlobeView forecasts={weatherForecasts} signals={weatherSignals} />
@@ -356,36 +434,47 @@ function App() {
 
           {/* Bottom panels - 3 side by side */}
           <div className="flex-1 min-h-0 grid grid-cols-3 border-t border-neutral-800">
-            {/* Edge Distribution */}
+            {/* Panel 1: Edge Distribution (Daily WX vs Hourly WX) */}
             <div className="border-r border-neutral-800 flex flex-col min-h-0">
-              <div className="px-2 py-1 border-b border-neutral-800 shrink-0">
+              <div className="px-2 py-1 border-b border-neutral-800 flex items-center justify-between shrink-0">
                 <span className="text-[10px] text-neutral-500 uppercase tracking-wider">Edge Distribution</span>
+                <span className="text-[9px] text-neutral-600 tabular-nums">Daily vs 1H</span>
               </div>
               <div className="flex-1 min-h-0 p-1">
-                <EdgeDistribution btcSignals={activeSignals} weatherSignals={weatherSignals} />
+                <EdgeDistribution dailySignals={weatherSignals} hourlySignals={hourlySignals} />
               </div>
             </div>
 
-            {/* BTC Windows */}
+            {/* Panel 2: Hourly Windows (Replacing BTC Windows) */}
             <div className="border-r border-neutral-800 flex flex-col min-h-0">
-              <div className="px-2 py-1 border-b border-neutral-800 shrink-0">
-                <span className="text-[10px] text-neutral-500 uppercase tracking-wider">BTC Windows</span>
+              <div className="px-2 py-1 border-b border-neutral-800 flex items-center justify-between shrink-0">
+                <span className="text-[10px] text-neutral-500 uppercase tracking-wider">Hourly Windows</span>
+                <span className="text-[9px] text-amber-400 tabular-nums">
+                  {hourlySignals.length} Active
+                </span>
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto p-1 space-y-1">
-                {windows.length > 0 ? (
-                  windows.slice(0, 10).map(w => (
-                    <WindowPill key={w.slug} window={w} />
+                {hourlySignals.length > 0 ? (
+                  hourlySignals.map(sig => (
+                    <HourlyWindowPill
+                      key={sig.ticker}
+                      signal={sig}
+                      onSimulateTrade={() => tradeMutation.mutate(sig.ticker)}
+                      isSimulating={tradeMutation.isPending}
+                    />
                   ))
                 ) : (
-                  <div className="text-[10px] text-neutral-600 p-2">No active windows</div>
+                  <div className="text-[10px] text-neutral-600 p-2">
+                    No active hourly windows in cycle (open 60m before hour)
+                  </div>
                 )}
               </div>
             </div>
 
-            {/* Weather Forecasts */}
+            {/* Panel 3: Weather Forecasts */}
             <div className="flex flex-col min-h-0">
               <div className="px-2 py-1 border-b border-neutral-800 flex items-center justify-between shrink-0">
-                <span className="text-[10px] text-neutral-500 uppercase tracking-wider">Weather</span>
+                <span className="text-[10px] text-neutral-500 uppercase tracking-wider">Daily Weather</span>
                 <span className="px-1 py-0.5 text-[8px] font-bold uppercase bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">WX</span>
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto">
@@ -402,16 +491,14 @@ function App() {
             <div className="px-2 py-1 border-b border-neutral-800 flex items-center justify-between shrink-0">
               <span className="text-[10px] text-neutral-500 uppercase tracking-wider">Signals</span>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-amber-400 tabular-nums">{activeSignals.length} BTC</span>
-                {weatherSignals.length > 0 && (
-                  <span className="text-[10px] text-cyan-400 tabular-nums">{weatherSignals.length} WX</span>
-                )}
+                <span className="text-[10px] text-cyan-400 tabular-nums">{weatherSignals.length} Daily</span>
+                <span className="text-[10px] text-amber-400 tabular-nums">{hourlySignals.length} 1H</span>
               </div>
             </div>
             <div className="flex-1 overflow-y-auto min-h-0">
               <SignalsTable
-                signals={activeSignals}
-                weatherSignals={weatherSignals}
+                dailySignals={weatherSignals}
+                hourlySignals={hourlySignals}
                 onSimulateTrade={(ticker) => tradeMutation.mutate(ticker)}
                 isSimulating={tradeMutation.isPending}
               />
@@ -434,11 +521,11 @@ function App() {
       {/* ===== FOOTER ===== */}
       <footer className="shrink-0 border-t border-neutral-800 px-3 py-0.5 flex items-center justify-between">
         <span className="text-[10px] text-neutral-700 font-mono">
-          Binance/Coinbase | Open-Meteo | Polymarket + Kalshi
+          AviationWeather.gov METAR | Open-Meteo Ensemble | Kalshi Live API
         </span>
         <div className="flex items-center gap-3">
           <RefreshBar interval={10000} />
-          <span className="text-[10px] text-neutral-700 font-mono">BTC 5-min + Weather Temp</span>
+          <span className="text-[10px] text-neutral-700 font-mono">Kalshi Weather: Daily Highs & Hourly Nowcasting</span>
           <div className="flex items-center gap-1">
             <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
             <span className="text-[10px] text-neutral-600 font-mono">Connected</span>
