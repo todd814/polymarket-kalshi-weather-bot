@@ -2,7 +2,7 @@
 import logging
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
@@ -35,25 +35,6 @@ CITY_TIMEZONES = {
 def _normal_cdf(x: float) -> float:
     """Standard normal cumulative distribution function (Gaussian CDF)."""
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
-
-
-def _estimate_diurnal_drift_per_hour(local_hour: int) -> float:
-    """
-    Estimate physical diurnal temperature change rate (°F per hour)
-    based on local solar time.
-    """
-    if 7 <= local_hour < 11:
-        return 1.5   # Rapid morning solar heating
-    elif 11 <= local_hour < 14:
-        return 1.0   # Midday warming towards daily maximum
-    elif 14 <= local_hour < 17:
-        return 0.0   # Thermal peak plateau
-    elif 17 <= local_hour < 20:
-        return -1.5  # Rapid late-afternoon / sunset radiational cooling
-    elif 20 <= local_hour < 24:
-        return -0.9  # Late evening cooling
-    else:
-        return -0.6  # Nocturnal baseline drift continuing until dawn (00:00 - 07:00)
 
 
 def compute_coastal_drift_and_sigma(
@@ -134,9 +115,8 @@ def compute_coastal_drift_and_sigma(
             sigma = max(0.3, 0.8 * math.sqrt(hours_to_close))
 
     elif city_key == "miami":
-        # Tropical maritime environment: large thermal inertia from moisture
-        drift = drift * 0.65
-        notes.append(f"Tropical damping (0.65x, SST {sst_floor:.0f}°F)")
+        # Tropical maritime environment (seasonal SST & heat/cool efficiency handled in SEASONAL_METRO_MATRIX)
+        notes.append(f"Tropical maritime regime (SST {sst_floor:.0f}°F)")
 
         # Atlantic sea breeze (060° to 120°)
         if wind_dir_deg is not None and 60 <= wind_dir_deg <= 120 and wind_speed_kt and wind_speed_kt >= 5.0:
@@ -205,15 +185,17 @@ def evaluate_hourly_market(
         local_hour = market.close_time.hour
 
     hours_to_close = minutes_rem / 60.0
+    local_mid_time = local_close_time - timedelta(minutes=minutes_rem / 2.0)
 
-    # Compute dynamic seasonal & orbital ephemeris drift + METAR surface albedo/sky coupling
+    # Compute dynamic seasonal & orbital ephemeris drift at the RK2 midpoint of [now, close_time]
     base_drift, ephem, sky = compute_seasonal_diurnal_drift(
         city_key=market.city_key,
-        local_dt=local_close_time,
+        local_dt=local_mid_time,
         current_temp_f=current_t,
         raw_metar=getattr(metar, "raw_ob", "") or "",
     )
-    is_night = ephem.is_night
+    ephem_close = compute_solar_ephemeris(market.city_key, local_close_time)
+    is_night = ephem.is_night or ephem_close.is_night
 
     # Adjust drift and sigma using coastal boundary layer and wind/moisture physics
     drift_rate, sigma, micro_notes = compute_coastal_drift_and_sigma(
