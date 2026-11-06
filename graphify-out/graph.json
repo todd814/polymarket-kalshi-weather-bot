@@ -3145,7 +3145,7 @@
       "file_type": "code",
       "norm_label": "scan_for_hourly_signals()",
       "source_file": "backend/core/hourly_signals.py",
-      "source_location": "L336"
+      "source_location": "L333"
     },
     {
       "id": "backend_core_seasonal_physics_compute_seasonal_diurnal_drift",
@@ -4501,7 +4501,7 @@
       "file_type": "code",
       "norm_label": "update_bot_state_with_settlements()",
       "source_file": "backend/core/settlement.py",
-      "source_location": "L431"
+      "source_location": "L435"
     },
     {
       "id": "backend_data_kalshi_client_py_any",
@@ -7386,7 +7386,7 @@
       "source_location": "L188"
     },
     {
-      "id": "backend_core_hourly_signals_rationale_339",
+      "id": "backend_core_hourly_signals_rationale_336",
       "label": "Scan all active hourly temperature markets and generate actionable signals.",
       "_origin": "ast",
       "community": 4,
@@ -7394,7 +7394,7 @@
       "file_type": "rationale",
       "norm_label": "scan all active hourly temperature markets and generate actionable signals.",
       "source_file": "backend/core/hourly_signals.py",
-      "source_location": "L339"
+      "source_location": "L336"
     },
     {
       "id": "backend_core_hourly_signals_rationale_36",
@@ -9422,7 +9422,7 @@
       "source_location": "L336"
     },
     {
-      "id": "backend_core_settlement_rationale_432",
+      "id": "backend_core_settlement_rationale_436",
       "label": "Update bot state with P&L from settled trades.",
       "_origin": "ast",
       "community": 9,
@@ -9430,7 +9430,7 @@
       "file_type": "rationale",
       "norm_label": "update bot state with p&l from settled trades.",
       "source_file": "backend/core/settlement.py",
-      "source_location": "L432"
+      "source_location": "L436"
     },
     {
       "id": "backend_core_settlement_rationale_58",
@@ -9997,6 +9997,18 @@
       "type": "external"
     },
     {
+      "id": "datetime",
+      "label": "datetime",
+      "_origin": "semantic",
+      "community": 53,
+      "community_name": "logging",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "datetime",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "logging",
       "label": "logging",
       "_origin": "semantic",
@@ -10113,17 +10125,6 @@
       "external": true,
       "file_type": "concept",
       "norm_label": "uvicorn",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "datetime",
-      "label": "datetime",
-      "community": 53,
-      "community_name": "logging",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "datetime",
       "source_file": "",
       "type": "external"
     }
@@ -11446,7 +11447,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/core/hourly_signals.py",
-      "source_location": "L318",
+      "source_location": "L315",
       "weight": 1.0
     },
     {
@@ -11470,7 +11471,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/core/hourly_signals.py",
-      "source_location": "L343",
+      "source_location": "L340",
       "weight": 1.0
     },
     {
@@ -11482,7 +11483,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/core/hourly_signals.py",
-      "source_location": "L349",
+      "source_location": "L346",
       "weight": 1.0
     },
     {
@@ -11494,7 +11495,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/core/hourly_signals.py",
-      "source_location": "L359",
+      "source_location": "L356",
       "weight": 1.0
     },
     {
@@ -11986,7 +11987,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/core/settlement.py",
-      "source_location": "L360",
+      "source_location": "L364",
       "weight": 1.0
     },
     {
@@ -11998,7 +11999,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "backend/core/settlement.py",
-      "source_location": "L362",
+      "source_location": "L366",
       "weight": 1.0
     },
     {
@@ -14818,7 +14819,7 @@
       "confidence_score": 1.0,
       "context": "generic_arg",
       "source_file": "backend/core/hourly_signals.py",
-      "source_location": "L336",
+      "source_location": "L333",
       "weight": 1.0
     },
     {
@@ -20998,7 +20999,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "backend/core/settlement.py",
-      "source_location": "L431",
+      "source_location": "L435",
       "weight": 1.0
     },
     {
@@ -21871,7 +21872,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/core/hourly_signals.py",
-      "source_location": "L336",
+      "source_location": "L333",
       "weight": 1.0
     },
     {
@@ -22179,7 +22180,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/core/settlement.py",
-      "source_location": "L431",
+      "source_location": "L435",
       "weight": 1.0
     },
     {
@@ -27228,14 +27229,14 @@
       "weight": 1.0
     },
     {
-      "source": "backend_core_hourly_signals_rationale_339",
+      "source": "backend_core_hourly_signals_rationale_336",
       "target": "backend_core_hourly_signals_scan_for_hourly_signals",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/core/hourly_signals.py",
-      "source_location": "L339",
+      "source_location": "L336",
       "weight": 1.0
     },
     {
@@ -27569,14 +27570,14 @@
       "weight": 1.0
     },
     {
-      "source": "backend_core_settlement_rationale_432",
+      "source": "backend_core_settlement_rationale_436",
       "target": "backend_core_settlement_update_bot_state_with_settlements",
       "relation": "rationale_for",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "backend/core/settlement.py",
-      "source_location": "L432",
+      "source_location": "L436",
       "weight": 1.0
     },
     {
@@ -29102,7 +29103,7 @@
       "confidence_score": 0.95,
       "context": "generic_arg",
       "source_file": "backend/core/settlement.py",
-      "source_location": "L431",
+      "source_location": "L435",
       "weight": 0.8
     },
     {
@@ -29673,7 +29674,7 @@
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "backend/core/settlement.py",
-      "source_location": "L403",
+      "source_location": "L407",
       "weight": 0.8
     },
     {
@@ -29684,7 +29685,7 @@
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "backend/core/settlement.py",
-      "source_location": "L437",
+      "source_location": "L441",
       "weight": 0.8
     },
     {
@@ -29989,5 +29990,5 @@
       "source_file": "README.md"
     }
   ],
-  "built_at_commit": "b6ebf191a8acae8f1dacca35dc13d3d7c7bb5bf4"
+  "built_at_commit": "d87a98580883c332fb14ec3ef46e24796dfa3697"
 }

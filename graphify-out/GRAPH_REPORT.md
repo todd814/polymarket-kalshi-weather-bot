@@ -1,7 +1,7 @@
 # Graph Report - polymarket-kalshi-weather-bot  (2026-11-06)
 
 ## Corpus Check
-- 71 files · ~74,807 words
+- 71 files · ~74,806 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 9 file(s) not represented in the graph (top: (none) 3, .example 2, .jsonl 2)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `b6ebf191`
+- Built from commit: `d87a9858`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
