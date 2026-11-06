@@ -42,9 +42,9 @@
     "semantic_hash": "89ecbf2f075121f87be249dcbd0c9e2c"
   },
   "backend/api/main.py": {
-    "mtime": 1793815032.4307384,
-    "seen": 1793815098.304854,
-    "ast_hash": "906ec5017e15088fdca5a5961930c84d",
+    "mtime": 1793931903.9118767,
+    "seen": 1793932340.548756,
+    "ast_hash": "a8652b3e1fcb971afc5fbe643db5e9a0",
     "semantic_hash": ""
   },
   "backend/config.py": {
@@ -60,15 +60,15 @@
     "semantic_hash": "872bd76ae95882dc93e879075dcb3af5"
   },
   "backend/core/scheduler.py": {
-    "mtime": 1793814999.1620245,
-    "seen": 1793815098.3048582,
-    "ast_hash": "373fe5eef88229b12d1c56a4302cfefa",
+    "mtime": 1793931941.2019153,
+    "seen": 1793932340.5487611,
+    "ast_hash": "5674a4ee38613b416fee3cbb0375d44c",
     "semantic_hash": ""
   },
   "backend/core/settlement.py": {
-    "mtime": 1793377792.0022402,
-    "seen": 1793454302.2270982,
-    "ast_hash": "08b42e4c3144b39acde815cce46fc5b7",
+    "mtime": 1793911488.2970562,
+    "seen": 1793932340.5487611,
+    "ast_hash": "329de7a07ccdb00a88dfd183aef41352",
     "semantic_hash": ""
   },
   "backend/core/signals.py": {
@@ -156,15 +156,15 @@
     "semantic_hash": "ef3ba2a81ba19f8ea5ddf625521e96f0"
   },
   "frontend/src/App.tsx": {
-    "mtime": 1793811183.9481082,
-    "seen": 1793811700.172662,
-    "ast_hash": "e5fe6ca04d69f0d5af4bd61eaa54b801",
+    "mtime": 1793846689.1064453,
+    "seen": 1793932340.548775,
+    "ast_hash": "5164e066d3a63e6a49ea5044bb3cb6d0",
     "semantic_hash": ""
   },
   "frontend/src/api.ts": {
-    "mtime": 1793377153.4424448,
-    "seen": 1793454302.2271109,
-    "ast_hash": "11facff8b28ecaac51ff353b6ec4c5aa",
+    "mtime": 1793846505.3237145,
+    "seen": 1793932340.548776,
+    "ast_hash": "a6f8ee30efa5dd33d6d96590ff0912d0",
     "semantic_hash": ""
   },
   "frontend/src/components/CalibrationPanel.tsx": {
@@ -174,10 +174,10 @@
     "semantic_hash": ""
   },
   "frontend/src/components/EdgeDistribution.tsx": {
-    "mtime": 1793044414.4654458,
-    "seen": 1793113323.260706,
-    "ast_hash": "8407a5ad6f1069be5c61ee0af3081788",
-    "semantic_hash": "8407a5ad6f1069be5c61ee0af3081788"
+    "mtime": 1793846518.9098654,
+    "seen": 1793932340.548778,
+    "ast_hash": "01831519490614e4c97a7d4d26c30805",
+    "semantic_hash": ""
   },
   "frontend/src/components/EquityChart.tsx": {
     "mtime": 1793044414.4655516,
@@ -204,10 +204,10 @@
     "semantic_hash": "f12b8cd23a78ce17212aaef7f814b8cf"
   },
   "frontend/src/components/SignalsTable.tsx": {
-    "mtime": 1793044414.4661179,
-    "seen": 1793113323.260709,
-    "ast_hash": "07c4ecc6f79c1176ee843c655f0edc10",
-    "semantic_hash": "07c4ecc6f79c1176ee843c655f0edc10"
+    "mtime": 1793846744.5968654,
+    "seen": 1793932340.548782,
+    "ast_hash": "b2c6c9b80141c6af79cda46ddadeca2e",
+    "semantic_hash": ""
   },
   "frontend/src/components/StatsCards.tsx": {
     "mtime": 1793377195.9875486,
@@ -222,9 +222,9 @@
     "semantic_hash": ""
   },
   "frontend/src/components/TradesTable.tsx": {
-    "mtime": 1793377183.297056,
-    "seen": 1793454302.2271192,
-    "ast_hash": "6c9c27fe3ce2985c4b392981782032e8",
+    "mtime": 1793846584.724234,
+    "seen": 1793932340.548784,
+    "ast_hash": "e85d3b8ebbe71d511d058448e2c09c6c",
     "semantic_hash": ""
   },
   "frontend/src/components/WeatherPanel.tsx": {
@@ -240,9 +240,9 @@
     "semantic_hash": ""
   },
   "frontend/src/types.ts": {
-    "mtime": 1793377173.5053298,
-    "seen": 1793454302.2271209,
-    "ast_hash": "2c4771d2e60ab41354406486a1bb0c94",
+    "mtime": 1793846488.1814299,
+    "seen": 1793932340.5487869,
+    "ast_hash": "bb4386e88f1f995c870ea281d9f07cf9",
     "semantic_hash": ""
   },
   "frontend/src/utils.ts": {
@@ -414,21 +414,21 @@
     "semantic_hash": ""
   },
   "backend/core/hourly_scheduler.py": {
-    "mtime": 1793814953.9812129,
-    "seen": 1793815098.304856,
-    "ast_hash": "e9974fa1fe7159d45840e83df9524b3a",
+    "mtime": 1793886935.8300672,
+    "seen": 1793932340.548759,
+    "ast_hash": "b2f6edf5e500b2b31fbbb2802f4b4e5a",
     "semantic_hash": ""
   },
   "backend/core/hourly_signals.py": {
-    "mtime": 1793814937.648578,
-    "seen": 1793815098.304857,
-    "ast_hash": "760023cb183bc471b2cb4b49186f5f49",
+    "mtime": 1793886862.554327,
+    "seen": 1793932340.5487602,
+    "ast_hash": "9fe9bd81ca5d356ab6a30035c10aa08e",
     "semantic_hash": ""
   },
   "backend/data/hourly_markets.py": {
-    "mtime": 1793814914.2206745,
-    "seen": 1793815098.304864,
-    "ast_hash": "81811511a265a7a901ca1b95c5854489",
+    "mtime": 1793815955.2171004,
+    "seen": 1793932340.548766,
+    "ast_hash": "d72cb9cbde06514a7099620ea5697f97",
     "semantic_hash": ""
   },
   "backend/data/metar.py": {

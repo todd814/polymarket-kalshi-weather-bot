@@ -1,31 +1,31 @@
-# Graph Report - polymarket-kalshi-weather-bot  (2026-11-04)
+# Graph Report - polymarket-kalshi-weather-bot  (2026-11-05)
 
 ## Corpus Check
-- 70 files · ~71,004 words
+- 70 files · ~72,310 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 9 file(s) not represented in the graph (top: (none) 3, .example 2, .jsonl 2)
 
 ## Summary
-- 839 nodes · 1659 edges · 73 communities (41 shown, 32 thin omitted)
-- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 83 edges (avg confidence: 0.93)
+- 850 nodes · 1679 edges · 70 communities (38 shown, 32 thin omitted)
+- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 85 edges (avg confidence: 0.93)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `e55f7cba`
+- Built from commit: `b3846c0c`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - KalshiClient
 - btc_markets.py
-- test_c137_quant.py
+- analytics/__init__.py
 - package.json
 - hourly_signals.py
 - signals.py
+- BotState
+- get_dashboard
+- init_db
 - scheduler.py
-- BaseModel
-- database.py
-- settlement.py
 - App.tsx
 - AILog
 - dependencies
@@ -39,7 +39,7 @@
 - get
 - Prediction Market Trading Bot
 - base.py
-- utils.ts
+- TradesTable.tsx
 - ConnectionManager
 - EquityChart.tsx
 - BaseAIClient
@@ -47,8 +47,8 @@
 - deploy
 - AIAnalysis
 - claude.py
-- TestC137QuantitativeCore
-- get_dashboard
+- WeatherMarket
+- scan_for_signals
 - SettlementCalibrationHarness
 - MicrostructurePanel.tsx
 - vercel.json
@@ -59,25 +59,23 @@
 - Platform and API Research
 - Layer 2B: Econ Pipeline
 - api/main.py
-- BtcMarket
+- HourlyMarket
 - 🌐 24/7 Free GCP Deployment Guide ($0.00 / month forever)
 - Backend Dependencies
 - main.tsx
 - typing
 - SignalsTable.tsx
-- weather.py
-- .test_simulate_trade_is_paper_and_stats_live_purity
-- TradesTable.tsx
+- EdgeDistribution.tsx
+- TestC137QuantitativeCore
+- stop_scheduler
+- .test_weather_no_edge_spread_and_bracket_agreement
 - deploy_gcp.sh
-- dataclasses
+- markets.py
 - devDependencies
-- get_recent_events
-- get_weather_signals
-- Settings
+- .test_kalshi_houston_series_negative_and_inclusive_strikes_and_empty_book
+- get_city_for_ticker
+- kalshi_client.py
 - scripts
-- get_btc_windows
-- get_weather_forecasts
-- get_weather_markets
 - vite.config.ts
 
 ## God Nodes (most connected - your core abstractions)
@@ -85,7 +83,7 @@
 2. `Trade` - 30 edges
 3. `TestC137QuantitativeCore` - 30 edges
 4. `BotState` - 27 edges
-5. `App()` - 22 edges
+5. `App()` - 23 edges
 6. `get_dashboard()` - 21 edges
 7. `Signal` - 20 edges
 8. `EnsembleForecast` - 19 edges
@@ -101,8 +99,8 @@
   test_c137_quant.py → backend/analytics/microstructure.py
 - `TestC137QuantitativeCore` --uses--> `OmniRiskGovernor`  [INFERRED]
   test_c137_quant.py → backend/analytics/risk_governor.py
-- `TestC137QuantitativeCore` --uses--> `KalshiClient`  [INFERRED]
-  test_c137_quant.py → backend/data/kalshi_client.py
+- `TestC137QuantitativeCore` --uses--> `WeatherTradingSignal`  [INFERRED]
+  test_c137_quant.py → backend/core/weather_signals.py
 
 ## Import Cycles
 - None detected.
@@ -110,51 +108,47 @@
 ## Hyperedges (group relationships)
 - **Weather Trading Subsystem** — architecture_layer2a_weather_pipeline, readme_strategy_weather_temperature, validated_research_kalshi_weather_tickers [INFERRED 0.85]
 
-## Communities (73 total, 32 thin omitted)
+## Communities (70 total, 32 thin omitted)
 
 ### Community 0 - "KalshiClient"
 Cohesion: 0.05
-Nodes (13): get_base_url(), KalshiClient, _extract_price(), fetch_kalshi_weather_markets(), _parse_kalshi_market(), _extract_date(), _parse_polymarket_weather(), _parse_weather_market_title() (+5 more)
+Nodes (20): weather_scan_and_trade_job(), calculate_kelly_size(), generate_weather_signal(), _persist_weather_signals(), scan_for_weather_signals(), get_base_url(), KalshiClient, _extract_price() (+12 more)
 
 ### Community 1 - "btc_markets.py"
-Cohesion: 0.18
-Nodes (8): _compute_window_slugs(), fetch_active_btc_markets(), fetch_btc_market_by_slug(), fetch_btc_market_for_settlement(), is_valid_btc_slug(), _parse_event_to_btc_market(), _round_to_5min(), test()
-
-### Community 2 - "test_c137_quant.py"
 Cohesion: 0.11
+Nodes (9): BtcMarket, _compute_window_slugs(), fetch_active_btc_markets(), fetch_btc_market_by_slug(), fetch_btc_market_for_settlement(), is_valid_btc_slug(), _parse_event_to_btc_market(), _round_to_5min() (+1 more)
+
+### Community 2 - "analytics/__init__.py"
+Cohesion: 0.16
 Nodes (4): ArbitrageOpportunity, MonotonicityScanner, GateResult, OmniRiskGovernor
 
 ### Community 3 - "package.json"
 Cohesion: 0.10
-Nodes (19): name, private, type, version, autoprefixer, clsx, d3-geo, leaflet (+11 more)
+Nodes (20): name, private, type, version, autoprefixer, axios, clsx, d3-geo (+12 more)
 
 ### Community 4 - "hourly_signals.py"
-Cohesion: 0.09
-Nodes (13): hourly_scan_and_trade_job(), hourly_settlement_job(), _estimate_diurnal_drift_per_hour(), evaluate_hourly_market(), HourlySignal, _normal_cdf(), scan_for_hourly_signals(), fetch_kalshi_hourly_markets() (+5 more)
+Cohesion: 0.13
+Nodes (9): compute_coastal_drift_and_sigma(), _estimate_diurnal_drift_per_hour(), evaluate_hourly_market(), HourlySignal, _normal_cdf(), scan_for_hourly_signals(), fetch_metar_observations(), get_city_current_temp() (+1 more)
 
 ### Community 5 - "signals.py"
-Cohesion: 0.15
-Nodes (8): calculate_edge(), calculate_kelly_size(), generate_btc_signal(), get_actionable_signals(), _persist_signals(), scan_for_signals(), test(), TradingSignal
+Cohesion: 0.25
+Nodes (4): calculate_edge(), generate_btc_signal(), _persist_signals(), test()
 
-### Community 6 - "scheduler.py"
+### Community 6 - "BotState"
+Cohesion: 0.17
+Nodes (15): get_equity_curve(), reset_bot(), run_scan(), settle_trades_endpoint(), simulate_trade(), start_bot(), startup(), stop_bot() (+7 more)
+
+### Community 7 - "get_dashboard"
 Cohesion: 0.11
-Nodes (17): run_scan(), shutdown(), start_bot(), startup(), heartbeat_job(), is_scheduler_running(), log_event(), run_manual_scan() (+9 more)
+Nodes (17): BotStats, BtcPriceResponse, BtcWindowResponse, CalibrationBucket, CalibrationSummary, _compute_calibration_summary(), DashboardData, get_btc_price() (+9 more)
 
-### Community 7 - "BaseModel"
-Cohesion: 0.15
-Nodes (10): BtcPriceResponse, CalibrationBucket, CalibrationSummary, _compute_calibration_summary(), DashboardData, get_btc_price(), get_calibration(), MicrostructureResponse (+2 more)
-
-### Community 8 - "database.py"
-Cohesion: 0.13
-Nodes (4): BtcPriceSnapshot, ensure_schema(), init_db(), ScanLog
-
-### Community 9 - "settlement.py"
-Cohesion: 0.15
-Nodes (10): calculate_pnl(), check_market_settlement(), check_weather_settlement(), _fetch_kalshi_resolution(), _fetch_nws_resolution(), fetch_polymarket_resolution(), _parse_market_resolution(), _search_market_in_events() (+2 more)
+### Community 9 - "scheduler.py"
+Cohesion: 0.06
+Nodes (20): hourly_scan_and_trade_job(), run_manual_settlement(), settlement_job(), calculate_pnl(), check_market_settlement(), check_weather_settlement(), _fetch_kalshi_resolution(), _fetch_nws_resolution() (+12 more)
 
 ### Community 10 - "App.tsx"
-Cohesion: 0.23
-Nodes (16): fetchDashboard(), runScan(), simulateTrade(), startBot(), stopBot(), App(), CityRadarFallback(), GlobeView (+8 more)
+Cohesion: 0.22
+Nodes (17): fetchDashboard(), fetchHourlySignals(), fetchMetar(), runScan(), simulateTrade(), startBot(), stopBot(), App() (+9 more)
 
 ### Community 11 - "AILog"
 Cohesion: 0.14
@@ -165,16 +159,16 @@ Cohesion: 0.11
 Nodes (19): dependencies, axios, clsx, d3-geo, date-fns, framer-motion, leaflet, lucide-react (+11 more)
 
 ### Community 13 - "api.ts"
-Cohesion: 0.13
-Nodes (7): api, Props, BtcPrice, BtcWindow, CalibrationSummary, DashboardData, axios
+Cohesion: 0.14
+Nodes (8): api, Props, BtcPrice, BtcWindow, CalibrationSummary, DashboardData, MetarObservation, Signal
 
 ### Community 14 - "compilerOptions"
 Cohesion: 0.11
 Nodes (18): compilerOptions, allowImportingTsExtensions, isolatedModules, jsx, lib, module, moduleResolution, noEmit (+10 more)
 
 ### Community 15 - "WeatherSignal"
-Cohesion: 0.19
-Nodes (14): BUCKETS, CustomTooltip(), EdgeDistribution(), getBucket(), Props, CITIES, CityMarker, Props (+6 more)
+Cohesion: 0.36
+Nodes (7): CITIES, CityMarker, Props, Props, WeatherForecast, WeatherSignal, react-globe.gl
 
 ### Community 18 - "FilterBar.tsx"
 Cohesion: 0.40
@@ -188,9 +182,9 @@ Nodes (7): get_c137_calibration(), get_hourly_signals(), get_kalshi_status(), ge
 Cohesion: 0.17
 Nodes (11): Layer 1: Market Scanner, Layer 2A: Weather Pipeline, Trading Bot Architecture, Trading Dashboard UI Screenshot, Frontend Web Entry Point, Fractional Kelly Criterion Sizing, Prediction Market Trading Bot, BTC 5-Minute Microstructure Strategy (+3 more)
 
-### Community 23 - "utils.ts"
-Cohesion: 0.24
-Nodes (3): AgreementBar(), WeatherPanel(), platformStyles
+### Community 23 - "TradesTable.tsx"
+Cohesion: 0.15
+Nodes (8): Props, SortDir, SortKey, AgreementBar(), WeatherPanel(), Trade, platformStyles, date-fns
 
 ### Community 25 - "EquityChart.tsx"
 Cohesion: 0.27
@@ -204,13 +198,13 @@ Nodes (7): compilerOptions, allowSyntheticDefaultImports, composite, module, mod
 Cohesion: 0.25
 Nodes (7): build, builder, deploy, healthcheckPath, restartPolicyType, startCommand, $schema
 
-### Community 31 - "TestC137QuantitativeCore"
-Cohesion: 0.08
-Nodes (7): WeatherTradingSignal, WeatherMarket, TestC137QuantitativeCore, run_dual_track_verification(), run_empty_book_check(), run_test(), run_scheduler_and_settlement_checks()
+### Community 31 - "WeatherMarket"
+Cohesion: 0.17
+Nodes (5): WeatherTradingSignal, WeatherMarket, run_dual_track_verification(), run_test(), run_scheduler_and_settlement_checks()
 
-### Community 32 - "get_dashboard"
-Cohesion: 0.29
-Nodes (4): get_actionable_signals(), get_dashboard(), get_signals(), _signal_to_response()
+### Community 32 - "scan_for_signals"
+Cohesion: 0.18
+Nodes (7): get_actionable_signals(), get_signals(), _signal_to_response(), SignalResponse, get_actionable_signals(), scan_for_signals(), TradingSignal
 
 ### Community 34 - "MicrostructurePanel.tsx"
 Cohesion: 0.53
@@ -229,8 +223,12 @@ Cohesion: 0.14
 Nodes (9): BtcMicrostructure, compute_btc_microstructure(), _compute_rsi(), CryptoPrice, estimate_price_probability(), fetch_binance_klines(), fetch_crypto_price(), fetch_multiple_prices() (+1 more)
 
 ### Community 44 - "api/main.py"
-Cohesion: 0.16
-Nodes (10): BotStats, get_equity_curve(), get_stats(), get_trades(), reset_bot(), settle_trades_endpoint(), simulate_trade(), stop_bot() (+2 more)
+Cohesion: 0.11
+Nodes (10): EventResponse, get_events(), get_weather_markets(), get_weather_signals(), _weather_signal_to_response(), WeatherMarketResponse, WeatherSignalResponse, websocket_events() (+2 more)
+
+### Community 46 - "HourlyMarket"
+Cohesion: 0.22
+Nodes (4): _extract_price(), fetch_kalshi_hourly_markets(), HourlyMarket, _parse_hourly_market()
 
 ### Community 48 - "🌐 24/7 Free GCP Deployment Guide ($0.00 / month forever)"
 Cohesion: 0.13
@@ -241,36 +239,24 @@ Cohesion: 0.18
 Nodes (7): ErrorBoundary, Props, State, queryClient, react, react-dom, @tanstack/react-query
 
 ### Community 53 - "typing"
-Cohesion: 0.15
-Nodes (3): _persist_weather_signals(), _extract_price(), fetch_polymarket_weather_markets()
+Cohesion: 0.14
+Nodes (5): hourly_settlement_job(), parse_expiry_from_ticker(), _extract_date(), _parse_polymarket_weather(), _parse_weather_market_title()
 
 ### Community 54 - "SignalsTable.tsx"
+Cohesion: 0.21
+Nodes (10): CategoryBadge(), EdgeBar(), PlatformBadge(), SignalsTable(), SortDir, SortKey, UnifiedSignal, LogEntry (+2 more)
+
+### Community 56 - "EdgeDistribution.tsx"
 Cohesion: 0.36
-Nodes (7): CategoryBadge(), EdgeBar(), PlatformBadge(), SignalsTable(), SortDir, SortKey, UnifiedSignal
+Nodes (7): BUCKETS, CustomTooltip(), EdgeDistribution(), getBucket(), Props, Props, HourlySignal
 
-### Community 55 - "weather.py"
-Cohesion: 0.23
-Nodes (5): generate_weather_signal(), _celsius_to_fahrenheit(), fetch_ensemble_forecast(), fetch_nws_observed_temperature(), test_weather_ensemble_and_edge_calculation()
-
-### Community 59 - "TradesTable.tsx"
-Cohesion: 0.22
-Nodes (8): LogEntry, Props, Props, SortDir, SortKey, Trade, date-fns, lucide-react
-
-### Community 62 - "dataclasses"
-Cohesion: 0.31
+### Community 62 - "markets.py"
+Cohesion: 0.36
 Nodes (3): btc_market_to_market_data(), fetch_all_markets(), MarketData
 
 ### Community 63 - "devDependencies"
 Cohesion: 0.22
 Nodes (9): devDependencies, autoprefixer, postcss, tailwindcss, @types/react, @types/react-dom, typescript, vite (+1 more)
-
-### Community 64 - "get_recent_events"
-Cohesion: 0.40
-Nodes (4): EventResponse, get_events(), websocket_events(), get_recent_events()
-
-### Community 65 - "get_weather_signals"
-Cohesion: 0.50
-Nodes (3): get_weather_signals(), _weather_signal_to_response(), WeatherSignalResponse
 
 ### Community 67 - "scripts"
 Cohesion: 0.50
@@ -278,23 +264,23 @@ Nodes (4): scripts, build, dev, preview
 
 ## Knowledge Gaps
 - **122 isolated node(s):** `Config`, `deploy_gcp.sh script`, `name`, `private`, `version` (+117 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 419 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 424 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **32 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `TestC137QuantitativeCore` connect `TestC137QuantitativeCore` to `KalshiClient`, `SettlementCalibrationHarness`, `test_c137_quant.py`, `MicrostructureEngine`, `scheduler.py`, `.test_nws_local_midnight_and_obs_cache`, `api/main.py`, `EnsembleForecast`, `.test_simulate_trade_is_paper_and_stats_live_purity`, `.test_nws_observation_weather_settlement_fallback`, `.test_weather_signal_ratchet_and_single_db_session`?**
-  _High betweenness centrality (0.057) - this node is a cross-community bridge._
+- **Why does `TestC137QuantitativeCore` connect `TestC137QuantitativeCore` to `KalshiClient`, `SettlementCalibrationHarness`, `analytics/__init__.py`, `.test_kalshi_houston_series_negative_and_inclusive_strikes_and_empty_book`, `MicrostructureEngine`, `BotState`, `.test_nws_local_midnight_and_obs_cache`, `scheduler.py`, `EnsembleForecast`, `test_c137_quant.py`, `.test_weather_no_edge_spread_and_bracket_agreement`, `WeatherMarket`?**
+  _High betweenness centrality (0.056) - this node is a cross-community bridge._
 - **Are the 4 inferred relationships involving `KalshiClient` (e.g. with `get_kalshi_status()` and `reset_bot()`) actually correct?**
   _`KalshiClient` has 4 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `Config`, `deploy_gcp.sh script`, `name` to the rest of the system?**
   _122 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `KalshiClient` be split into smaller, more focused modules?**
-  _Cohesion score 0.054354178842782 - nodes in this community are weakly interconnected._
-- **Why does `KalshiClient` connect `KalshiClient` to `test_c137_quant.py`, `hourly_signals.py`, `scheduler.py`, `settlement.py`, `api/main.py`, `get`, `typing`, `TestC137QuantitativeCore`?**
-  _High betweenness centrality (0.056) - this node is a cross-community bridge._
+  _Cohesion score 0.05384615384615385 - nodes in this community are weakly interconnected._
+- **Why does `KalshiClient` connect `KalshiClient` to `kalshi_client.py`, `BotState`, `scheduler.py`, `api/main.py`, `HourlyMarket`, `get`, `typing`, `test_c137_quant.py`, `TestC137QuantitativeCore`?**
+  _High betweenness centrality (0.055) - this node is a cross-community bridge._
 - **Are the 16 inferred relationships involving `Trade` (e.g. with `get_dashboard()` and `get_equity_curve()`) actually correct?**
   _`Trade` has 16 INFERRED edges - model-reasoned connections that need verification._
-- **Should `test_c137_quant.py` be split into smaller, more focused modules?**
-  _Cohesion score 0.11231884057971014 - nodes in this community are weakly interconnected._
+- **Should `btc_markets.py` be split into smaller, more focused modules?**
+  _Cohesion score 0.1111111111111111 - nodes in this community are weakly interconnected._
