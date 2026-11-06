@@ -338,7 +338,11 @@ async def settle_pending_trades(db: Session) -> List[Trade]:
     Uses REAL market outcomes from Polymarket API.
     """
     try:
-        pending = db.query(Trade).filter(Trade.settled == False).all()
+        # Hourly weather trades (weather_hourly) are batch-settled by hourly_settlement_job
+        pending = db.query(Trade).filter(
+            Trade.settled == False,
+            Trade.market_type != "weather_hourly",
+        ).all()
     except Exception as e:
         logger.error(f"Failed to query pending trades: {e}")
         return []
