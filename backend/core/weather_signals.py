@@ -5,6 +5,7 @@ from datetime import datetime, date
 from typing import List, Optional
 
 from backend.config import settings
+from backend.core.seasonal_physics import CLIMATOLOGICAL_NORMALS_F, get_season_name
 from backend.core.signals import calculate_edge, calculate_kelly_size
 from backend.data.weather import fetch_ensemble_forecast, fetch_nws_observed_temperature, EnsembleForecast, CITY_CONFIG
 from backend.data.weather_markets import WeatherMarket, fetch_polymarket_weather_markets
@@ -190,9 +191,15 @@ async def generate_weather_signal(
     ) if edge > 0 else 0.0
     suggested_size = min(suggested_size, settings.WEATHER_MAX_TRADE_SIZE)
 
-    # Ensemble stats for display
+    # Ensemble stats & seasonal climatological context for display
     mean_val = forecast.mean_high if market.metric == "high" else forecast.mean_low
     std_val = forecast.std_high if market.metric == "high" else forecast.std_low
+
+    season = get_season_name(market.target_date.month, market.target_date.day)
+    normals_table = CLIMATOLOGICAL_NORMALS_F.get(market.city_key, CLIMATOLOGICAL_NORMALS_F["nyc"])
+    norm_high, norm_low = normals_table.get(market.target_date.month, (65.0, 48.0))
+    clim_norm = norm_high if market.metric == "high" else norm_low
+    clim_anomaly = mean_val - clim_norm
 
     # Build reasoning
     filter_status = "ACTIONABLE" if (edge >= settings.WEATHER_MIN_EDGE_THRESHOLD and suggested_size > 0) else "FILTERED"
@@ -205,8 +212,8 @@ async def generate_weather_signal(
 
     reasoning = (
         f"[{filter_status}]{filter_note} "
-        f"{market.city_name} {market.metric} {market.direction} {strike_label} on {market.target_date} | "
-        f"Ensemble: {mean_val:.1f}F +/- {std_val:.1f}F ({forecast.num_members} members) | "
+        f"{market.city_name} {market.metric} {market.direction} {strike_label} on {market.target_date} ({season.upper()}) | "
+        f"Ensemble: {mean_val:.1f}F +/- {std_val:.1f}F ({forecast.num_members}m, Clim: {clim_norm:.1f}F {clim_anomaly:+.1f}F) | "
         f"Model YES: {model_yes_prob:.0%} vs Market: {market_yes_prob:.0%} | "
         f"Edge: {edge:+.1%} -> {direction.upper()} @ {entry_price:.0%} | "
         f"Agreement: {agreement_frac:.0%}"
@@ -221,7 +228,7 @@ async def generate_weather_signal(
         confidence=confidence,
         kelly_fraction=suggested_size / bankroll if bankroll > 0 else 0,
         suggested_size=suggested_size,
-        sources=[f"open_meteo_ensemble_{forecast.num_members}m"],
+        sources=[f"open_meteo_ensemble_{forecast.num_members}m", "noaa_30yr_normals"],
         reasoning=reasoning,
         ensemble_mean=mean_val,
         ensemble_std=std_val,

@@ -78,9 +78,9 @@
     "semantic_hash": "70665b5d620f0ff30c7f953e6cdb82c0"
   },
   "backend/core/weather_signals.py": {
-    "mtime": 1793280876.049719,
-    "seen": 1793454302.2271,
-    "ast_hash": "aa5260b9db8c67ef018215d5b63bb28a",
+    "mtime": 1793989810.6554112,
+    "seen": 1793989847.2639081,
+    "ast_hash": "1f6bdcdc68081171ce2da718aed58f3f",
     "semantic_hash": ""
   },
   "backend/data/__init__.py": {
@@ -420,9 +420,9 @@
     "semantic_hash": ""
   },
   "backend/core/hourly_signals.py": {
-    "mtime": 1793886862.554327,
-    "seen": 1793932340.5487602,
-    "ast_hash": "9fe9bd81ca5d356ab6a30035c10aa08e",
+    "mtime": 1793989767.786876,
+    "seen": 1793989847.263903,
+    "ast_hash": "b76ef60b6727abdbd69d7243658d6f4e",
     "semantic_hash": ""
   },
   "backend/data/hourly_markets.py": {
@@ -435,6 +435,12 @@
     "mtime": 1793815069.2655072,
     "seen": 1793815098.304867,
     "ast_hash": "4f7ffd8a164666e4dba9d40dc5cbde53",
+    "semantic_hash": ""
+  },
+  "backend/core/seasonal_physics.py": {
+    "mtime": 1793989691.4298117,
+    "seen": 1793989847.263905,
+    "ast_hash": "6afdf4b09bba8a705eb583392b5c5b8f",
     "semantic_hash": ""
   }
 }

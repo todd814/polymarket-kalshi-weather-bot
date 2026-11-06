@@ -7,6 +7,12 @@ from typing import Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 from backend.config import settings
+from backend.core.seasonal_physics import (
+    SolarEphemeris,
+    SurfaceSkyCoupling,
+    compute_seasonal_diurnal_drift,
+    compute_solar_ephemeris,
+)
 from backend.data.hourly_markets import HourlyMarket, fetch_kalshi_hourly_markets
 from backend.data.metar import MetarObservation, fetch_metar_observations, CITY_STATIONS
 
@@ -59,58 +65,68 @@ def compute_coastal_drift_and_sigma(
     wind_speed_kt: Optional[float],
     wind_dir_deg: Optional[int],
     hours_to_close: float,
+    ephem: Optional[SolarEphemeris] = None,
+    sky: Optional[SurfaceSkyCoupling] = None,
 ) -> Tuple[float, float, str]:
     """
     Adjust thermal drift rate (°F/hr) and Gaussian uncertainty (sigma) based on
-    real-time METAR boundary layer indicators:
+    real-time METAR boundary layer indicators and seasonal orbital ephemeris:
     - Pacific onshore marine layer and nocturnal radiational cooling at LAX
     - Tropical Atlantic humidity damping at MIA
     - Dewpoint depression (fog / stratus saturation ceiling)
+    - Seasonal SST floor & baroclinic synoptic sigma scaling
     """
     drift = base_drift
-    sigma = max(0.4, 1.1 * math.sqrt(hours_to_close))
+    season_sigma_mult = ephem.sigma_mult if ephem else 1.0
+    sky_sigma_mult = sky.sigma_mult if sky else 1.0
+    sigma = max(0.4, 1.1 * season_sigma_mult * sky_sigma_mult * math.sqrt(hours_to_close))
     notes = []
 
+    if ephem:
+        notes.append(f"{ephem.season.upper()} sun {ephem.elevation_deg:+.0f}°")
+    if sky and sky.condition_tag != "nominal sky":
+        notes.append(sky.condition_tag)
+
     dewp_depression = (current_temp_f - dewpoint_f) if dewpoint_f is not None else 10.0
-    is_night = (local_hour >= 18 or local_hour < 7)
+    is_night = ephem.is_night if ephem is not None else (local_hour >= 18 or local_hour < 7)
+    sst_floor = ephem.sst_floor_f if ephem is not None else 56.0
 
     if city_key == "los_angeles":
         # LAX / Santa Monica Bay Marine Layer Model:
-        # Typical sea surface temp off LAX is 58-62°F.
         # Onshore Pacific wind: 210° (SSW) to 300° (WNW)
         is_onshore = (wind_dir_deg is not None and 210 <= wind_dir_deg <= 300)
         has_breeze = (wind_speed_kt is not None and wind_speed_kt >= 4.0)
 
-        # 1. Daytime Onshore Sea Breeze Surge (11:00 - 18:00)
-        if is_onshore and has_breeze and (11 <= local_hour < 18):
-            notes.append(f"Onshore {wind_dir_deg}°@{wind_speed_kt:.0f}kt marine surge")
+        # 1. Daytime Onshore Sea Breeze Surge
+        if is_onshore and has_breeze and not is_night and local_hour >= 11:
+            notes.append(f"Onshore {wind_dir_deg}°@{wind_speed_kt:.0f}kt marine surge (SST {sst_floor:.0f}°F)")
             drift = min(drift, 0.0)  # Afternoon sea breeze halts warming
-            sigma = max(0.6, 1.4 * math.sqrt(hours_to_close))
+            sigma = max(0.6, 1.4 * season_sigma_mult * math.sqrt(hours_to_close))
 
-        # 2. Nighttime Coastal Radiational Cooling & Marine Inversion (18:00 - 07:00)
+        # 2. Nighttime Coastal Radiational Cooling & Marine Inversion
         elif is_night:
-            dewp_target = dewpoint_f if dewpoint_f is not None else 56.0
+            dewp_target = dewpoint_f if dewpoint_f is not None else sst_floor
             if current_temp_f > dewp_target:
-                # Strong radiative drop towards marine dewpoint floor
+                # Strong radiative drop towards marine dewpoint / seasonal SST floor
                 thermal_head = current_temp_f - dewp_target
                 coastal_night_drift = -max(1.0, min(2.2, 0.8 + 0.15 * thermal_head))
                 drift = min(drift, coastal_night_drift)
                 notes.append(f"Night marine cooling ({drift:+.1f}°F/h towards Td {dewp_target:.0f}°F)")
             else:
                 drift = min(drift, -0.4)
-                notes.append("At marine dewpoint floor")
+                notes.append(f"At marine dewpoint floor ({dewp_target:.0f}°F)")
 
             # Calm winds at night promote decoupled radiational inversion
             if wind_speed_kt is not None and wind_speed_kt < 4.0:
                 notes.append("Calm radiative boundary decoupling")
                 drift = min(drift, -1.2)
 
-            sigma = max(0.5, 1.2 * math.sqrt(hours_to_close))
+            sigma = max(0.5, 1.2 * season_sigma_mult * math.sqrt(hours_to_close))
 
         # 3. Offshore Santa Ana dry flow
         elif wind_dir_deg is not None and (30 <= wind_dir_deg <= 90):
             notes.append(f"Offshore {wind_dir_deg}° dry flow")
-            sigma = max(0.4, 1.0 * math.sqrt(hours_to_close))
+            sigma = max(0.4, 1.0 * season_sigma_mult * math.sqrt(hours_to_close))
 
         if dewp_depression <= 3.0:
             notes.append("Marine fog/stratus ceiling (T-Td<=3°F)")
@@ -120,23 +136,23 @@ def compute_coastal_drift_and_sigma(
     elif city_key == "miami":
         # Tropical maritime environment: large thermal inertia from moisture
         drift = drift * 0.65
-        notes.append("Tropical high-humidity damping (0.65x)")
+        notes.append(f"Tropical damping (0.65x, SST {sst_floor:.0f}°F)")
 
         # Atlantic sea breeze (060° to 120°)
         if wind_dir_deg is not None and 60 <= wind_dir_deg <= 120 and wind_speed_kt and wind_speed_kt >= 5.0:
             notes.append(f"Atlantic sea breeze {wind_dir_deg}°@{wind_speed_kt:.0f}kt")
-            if 12 <= local_hour < 17:
+            if not is_night and local_hour >= 12:
                 drift = min(drift, 0.2)
 
-        sigma = max(0.5, 1.25 * math.sqrt(hours_to_close))
+        sigma = max(0.5, 1.25 * season_sigma_mult * math.sqrt(hours_to_close))
 
     elif city_key in ("nyc", "boston", "philadelphia"):
         if wind_dir_deg is not None and 60 <= wind_dir_deg <= 160 and wind_speed_kt and wind_speed_kt >= 7.0:
-            notes.append(f"Atlantic maritime flow {wind_dir_deg}°")
+            notes.append(f"Atlantic maritime flow {wind_dir_deg}° (SST {sst_floor:.0f}°F)")
             if drift > 0:
                 drift = drift * 0.7
 
-    return drift, sigma, ("; ".join(notes) if notes else "standard continental drift")
+    return round(drift, 2), round(sigma, 2), ("; ".join(notes) if notes else "standard continental drift")
 
 
 @dataclass
@@ -185,11 +201,19 @@ def evaluate_hourly_market(
         local_close_time = market.close_time.astimezone(ZoneInfo(tz_name))
         local_hour = local_close_time.hour
     except Exception:
+        local_close_time = market.close_time
         local_hour = market.close_time.hour
 
     hours_to_close = minutes_rem / 60.0
-    base_drift = _estimate_diurnal_drift_per_hour(local_hour)
-    is_night = (local_hour >= 18 or local_hour < 7)
+
+    # Compute dynamic seasonal & orbital ephemeris drift + METAR surface albedo/sky coupling
+    base_drift, ephem, sky = compute_seasonal_diurnal_drift(
+        city_key=market.city_key,
+        local_dt=local_close_time,
+        current_temp_f=current_t,
+        raw_metar=getattr(metar, "raw_ob", "") or "",
+    )
+    is_night = ephem.is_night
 
     # Adjust drift and sigma using coastal boundary layer and wind/moisture physics
     drift_rate, sigma, micro_notes = compute_coastal_drift_and_sigma(
@@ -201,6 +225,8 @@ def evaluate_hourly_market(
         wind_speed_kt=metar.wind_speed_kt,
         wind_dir_deg=metar.wind_dir_deg,
         hours_to_close=hours_to_close,
+        ephem=ephem,
+        sky=sky,
     )
 
     # 1. Monotonic Cooling Clamp at Night
