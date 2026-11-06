@@ -1209,7 +1209,7 @@ async def websocket_events(websocket: WebSocket):
         await websocket.send_json({
             "timestamp": datetime.utcnow().isoformat(),
             "type": "success",
-            "message": "Connected to BTC trading bot"
+            "message": "Connected to Weather trading bot"
         })
 
         from backend.core.scheduler import get_recent_events

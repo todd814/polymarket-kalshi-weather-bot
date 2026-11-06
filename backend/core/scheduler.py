@@ -439,9 +439,9 @@ async def weather_scan_and_trade_job():
 async def settlement_job():
     """
     Background job: Check and settle pending trades.
-    Runs every 2 minutes (BTC 5-min markets resolve fast).
+    Runs every 2 minutes.
     """
-    log_event("info", "Checking BTC trade settlements...")
+    log_event("info", "Checking trade settlements...")
 
     try:
         from backend.core.settlement import settle_pending_trades, update_bot_state_with_settlements
@@ -588,11 +588,12 @@ def start_scheduler():
         )
 
     scheduler.start()
-    log_event("success", "BTC 5-min trading scheduler started", {
+    log_event("success", "Autonomous trading scheduler started", {
         "scan_interval": f"{scan_seconds}s",
         "settlement_interval": f"{settle_seconds}s",
-        "min_edge": f"{settings.MIN_EDGE_THRESHOLD:.0%}",
+        "btc_enabled": settings.BTC_ENABLED,
         "weather_enabled": settings.WEATHER_ENABLED,
+        "hourly_weather_enabled": getattr(settings, "HOURLY_WEATHER_ENABLED", False),
     })
 
     if settings.BTC_ENABLED:
