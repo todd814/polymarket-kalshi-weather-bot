@@ -380,27 +380,28 @@ async def settle_pending_trades(db: Session) -> List[Trade]:
 
                 settled_trades.append(trade)
 
-                # Record to C-137 calibration harness
-                try:
-                    cat = getattr(trade, 'market_type', 'btc') or 'btc'
-                    raw_model_prob = getattr(trade, 'model_probability', None)
-                    dir_lower = (getattr(trade, 'direction', 'yes') or 'yes').lower()
-                    if raw_model_prob is not None:
-                        pred_prob = raw_model_prob if dir_lower in ("up", "yes") else (1.0 - raw_model_prob)
-                    else:
-                        pred_prob = getattr(trade, 'entry_price', 0.5) or 0.5
-                    calibration_harness.record_settlement(
-                        trade_id=str(trade.id),
-                        ticker=trade.market_ticker,
-                        category=cat,
-                        predicted_prob=pred_prob,
-                        actual_outcome=1.0 if trade.result == "win" else 0.0,
-                        size=trade.size,
-                        entry_price=trade.entry_price,
-                        pnl=pnl or 0.0
-                    )
-                except Exception as ce:
-                    logger.debug(f"Failed to record C-137 calibration for trade {trade.id}: {ce}")
+                # Record to C-137 calibration harness (strictly for LIVE production trades)
+                if getattr(trade, "is_paper", False) is not True:
+                    try:
+                        cat = getattr(trade, 'market_type', 'btc') or 'btc'
+                        raw_model_prob = getattr(trade, 'model_probability', None)
+                        dir_lower = (getattr(trade, 'direction', 'yes') or 'yes').lower()
+                        if raw_model_prob is not None:
+                            pred_prob = raw_model_prob if dir_lower in ("up", "yes") else (1.0 - raw_model_prob)
+                        else:
+                            pred_prob = getattr(trade, 'entry_price', 0.5) or 0.5
+                        calibration_harness.record_settlement(
+                            trade_id=str(trade.id),
+                            ticker=trade.market_ticker,
+                            category=cat,
+                            predicted_prob=pred_prob,
+                            actual_outcome=1.0 if trade.result == "win" else 0.0,
+                            size=trade.size,
+                            entry_price=trade.entry_price,
+                            pnl=pnl or 0.0
+                        )
+                    except Exception as ce:
+                        logger.debug(f"Failed to record C-137 calibration for trade {trade.id}: {ce}")
 
                 # Update linked Signal with actual outcome for calibration
                 if trade.signal_id:

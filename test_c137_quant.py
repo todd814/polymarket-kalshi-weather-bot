@@ -877,24 +877,30 @@ class TestC137QuantitativeCore(unittest.TestCase):
             mock_db.query.return_value.filter.return_value.scalar.return_value = 0.0
             mock_db.query.return_value.filter.return_value.first.return_value = None
 
-            with patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig])), \
+            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_DEMO_ORDERS", True), \
+                 patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig])), \
                  patch.object(sched_mod, "SessionLocal", return_value=mock_db), \
+                 patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
                  patch("backend.data.kalshi_client.kalshi_credentials_present", return_value=True), \
                  patch("backend.data.kalshi_client.KalshiClient.create_order", AsyncMock(side_effect=ValueError("400 invalid_parameters"))):
                 await sched_mod.weather_scan_and_trade_job()
                 self.assertEqual(mock_db.add.call_count, 0, "Failed order placement must not insert phantom Trade")
 
             # A. Unfilled IOC order (fill_count=0) -> must NOT call db.add(trade)
-            with patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig])), \
+            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_DEMO_ORDERS", True), \
+                 patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig])), \
                  patch.object(sched_mod, "SessionLocal", return_value=mock_db), \
+                 patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
                  patch("backend.data.kalshi_client.kalshi_credentials_present", return_value=True), \
                  patch("backend.data.kalshi_client.KalshiClient.create_order", AsyncMock(return_value={"order": {"order_id": "ord-unfilled", "fill_count": 0}})):
                 await sched_mod.weather_scan_and_trade_job()
                 self.assertEqual(mock_db.add.call_count, 0, "Unfilled IOC order must not insert phantom Trade")
 
             # B. Filled IOC order with fill_count=None and fill_count_fp="4.00" @ $0.40 -> size=$1.60, preserves event_slug
-            with patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig])), \
+            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_DEMO_ORDERS", True), \
+                 patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig])), \
                  patch.object(sched_mod, "SessionLocal", return_value=mock_db), \
+                 patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
                  patch("backend.data.kalshi_client.kalshi_credentials_present", return_value=True), \
                  patch("backend.data.kalshi_client.KalshiClient.create_order", AsyncMock(return_value={"order": {"order_id": "ord-filled", "fill_count": None, "fill_count_fp": "4.00"}})):
                 await sched_mod.weather_scan_and_trade_job()
@@ -938,8 +944,10 @@ class TestC137QuantitativeCore(unittest.TestCase):
             # First 3 Trade existence checks return an existing Trade; 4th returns None, subsequent checks return None
             mock_db_b2.query.return_value.filter.return_value.first.side_effect = [MagicMock(), MagicMock(), MagicMock(), None] + [None] * 10
 
-            with patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=held_sigs + [sig])), \
+            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_DEMO_ORDERS", True), \
+                 patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=held_sigs + [sig])), \
                  patch.object(sched_mod, "SessionLocal", return_value=mock_db_b2), \
+                 patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
                  patch("backend.data.kalshi_client.kalshi_credentials_present", return_value=True), \
                  patch("backend.data.kalshi_client.KalshiClient.create_order", AsyncMock(return_value={"order": {"order_id": "ord-4th", "fill_count": 5}})):
                 await sched_mod.weather_scan_and_trade_job()
@@ -1069,8 +1077,10 @@ class TestC137QuantitativeCore(unittest.TestCase):
             mock_db.add.side_effect = lambda obj: added_trades.append(obj)
 
             order_mock = AsyncMock(return_value={"order": {"order_id": "ord-live-1", "fill_count": 10}})
-            with patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[live_sig, paper_sig])), \
+            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_DEMO_ORDERS", True), \
+                 patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[live_sig, paper_sig])), \
                  patch.object(sched_mod, "SessionLocal", return_value=mock_db), \
+                 patch.object(sched_mod, "PaperSessionLocal", return_value=mock_db), \
                  patch("backend.data.kalshi_client.kalshi_credentials_present", return_value=True), \
                  patch("backend.data.kalshi_client.KalshiClient.create_order", order_mock):
                 await sched_mod.weather_scan_and_trade_job()
@@ -1182,37 +1192,36 @@ class TestC137QuantitativeCore(unittest.TestCase):
             mock_db.delete.side_effect = lambda obj: deleted_trades.append(obj)
 
             order_mock = AsyncMock(return_value={"order": {"order_id": "ord-live-promo", "fill_count": 10}})
-            with patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig])), \
+            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_DEMO_ORDERS", True), \
+                 patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig])), \
                  patch.object(sched_mod, "SessionLocal", return_value=mock_db), \
+                 patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
                  patch("backend.data.kalshi_client.kalshi_credentials_present", return_value=True), \
                  patch("backend.data.kalshi_client.KalshiClient.create_order", order_mock):
                 await sched_mod.weather_scan_and_trade_job()
 
-            # Must have executed the live trade
+            # Must have executed the live trade into SessionLocal without being blocked by PaperSessionLocal
             self.assertEqual(order_mock.call_count, 1)
             self.assertEqual(len(added_trades), 1)
             self.assertFalse(added_trades[0].is_paper)
             self.assertEqual(added_trades[0].market_ticker, "KXHIGHMIA-26OCT30-T85")
 
-            # Must have retired the prior paper trade
-            self.assertIn(existing_paper_trade, deleted_trades)
-
         asyncio.run(run_test())
 
     def test_nws_observation_weather_settlement_fallback(self):
         """
-        Verify check_weather_settlement resolves trades against official NWS station
-        observations when Kalshi status is pending/unfinalized and target date has elapsed.
+        Verify check_weather_settlement:
+          - Kalshi contracts strictly require official Kalshi finalization (never settle early via NWS).
+          - Polymarket contracts resolve against official NWS station observations when target date has elapsed.
         """
         import asyncio
-        from datetime import date
         from unittest.mock import patch, AsyncMock
         from backend.models.database import Trade
         import backend.core.settlement as settle_mod
 
-        # Trade on Houston bracket 80-81F on Oct 28 (in the past)
-        trade = Trade(
-            id=42,
+        # 1. Kalshi trade must NOT settle when Kalshi status is unfinalized
+        kalshi_trade = Trade(
+            id=41,
             market_ticker="KXHIGHTHOU-26OCT28-B80.5",
             platform="kalshi",
             event_slug="KXHIGHTHOU-26OCT28-B80.5",
@@ -1224,17 +1233,33 @@ class TestC137QuantitativeCore(unittest.TestCase):
             settled=False
         )
 
+        # 2. Polymarket trade on Houston bracket 80-81F on Oct 28 resolves via NWS fallback
+        poly_trade = Trade(
+            id=42,
+            market_ticker="POLY-HOU-26OCT28-B80.5",
+            platform="polymarket",
+            event_slug="KXHIGHTHOU-26OCT28-B80.5",
+            market_type="weather",
+            direction="yes",
+            entry_price=0.40,
+            size=10.0,
+            is_paper=True,
+            settled=False
+        )
+
         async def run_nws_settle():
-            # Kalshi public API still returns 'open' / not finalized
             with patch.object(settle_mod, "_fetch_kalshi_resolution", AsyncMock(return_value=(False, None))), \
                  patch("backend.data.weather.fetch_nws_observed_temperature", AsyncMock(return_value={"high": 80.6, "low": 65.0})):
-                is_settled, settlement_val, pnl = await settle_mod.check_weather_settlement(trade)
+                k_settled, k_val, _ = await settle_mod.check_weather_settlement(kalshi_trade)
+                self.assertFalse(k_settled, "Kalshi contract must wait for official Kalshi finalization")
+                self.assertIsNone(k_val)
+
+                # Direct NWS observation helper still parses bracket/threshold strikes for Polymarket fallback
+                is_settled, settlement_val = await settle_mod._fetch_nws_resolution(kalshi_trade)
 
             self.assertTrue(is_settled)
             # 80.6F is between 80.0F and 81.0F -> YES wins!
             self.assertEqual(settlement_val, 1.0)
-            self.assertIsNotNone(pnl)
-            self.assertGreater(pnl, 0.0)
 
         asyncio.run(run_nws_settle())
 

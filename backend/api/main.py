@@ -10,7 +10,7 @@ import os
 
 from backend.config import settings
 from backend.models.database import (
-    get_db, init_db, SessionLocal,
+    get_db, get_paper_db, init_db, SessionLocal, PaperSessionLocal,
     Signal, Trade, BotState, AILog, ScanLog
 )
 from backend.core.signals import scan_for_signals, TradingSignal
@@ -526,12 +526,8 @@ async def get_equity_curve(is_paper: bool = False, db: Session = Depends(get_db)
 
 
 @app.post("/api/simulate-trade")
-async def simulate_trade(signal_ticker: str, db: Session = Depends(get_db)):
+async def simulate_trade(signal_ticker: str, db: Session = Depends(get_paper_db)):
     from backend.core.scheduler import log_event
-
-    state = db.query(BotState).first()
-    if not state:
-        raise HTTPException(status_code=500, detail="Bot state not initialized")
 
     # 1. Check Hourly Weather Signals (Kalshi Synoptic series e.g. KXTEMPNYCHS, KXTEMPMIAH)
     if "KXTEMP" in signal_ticker.upper():
@@ -555,8 +551,7 @@ async def simulate_trade(signal_ticker: str, db: Session = Depends(get_db)):
             )
             db.add(trade)
             db.commit()
-            log_event("trade", f"Manual 1H Paper Trade: {h_sig.direction.upper()} ${trade.size:.2f} on {h_sig.market.ticker}")
-            return {"status": "ok", "trade_id": trade.id, "size": trade.size}
+            return {"status": "ok", "trade_id": trade.id, "size": trade.size, "database": "paper_training.db"}
 
     # 2. Check Daily Weather Signals (Kalshi / Polymarket e.g. KXHIGHNY, KXHIGHCHI)
     if settings.WEATHER_ENABLED:
@@ -581,37 +576,9 @@ async def simulate_trade(signal_ticker: str, db: Session = Depends(get_db)):
             )
             db.add(trade)
             db.commit()
-            log_event("trade", f"Manual Daily Paper Trade: {wx_sig.direction.upper()} ${trade.size:.2f} on {wx_sig.market.market_id}")
-            return {"status": "ok", "trade_id": trade.id, "size": trade.size}
+            return {"status": "ok", "trade_id": trade.id, "size": trade.size, "database": "paper_training.db"}
 
-    # 3. Fallback to BTC signals (if enabled)
-    signals = await scan_for_signals()
-    signal = next((s for s in signals if s.market.market_id == signal_ticker), None)
-
-    if not signal:
-        raise HTTPException(status_code=404, detail="Signal not found")
-
-    entry_price = signal.market.up_price if signal.direction == "up" else signal.market.down_price
-
-    trade = Trade(
-        market_ticker=signal.market.market_id,
-        platform="polymarket",
-        event_slug=signal.market.slug,
-        market_type="btc",
-        direction=signal.direction,
-        entry_price=entry_price,
-        size=min(signal.suggested_size, state.bankroll * 0.05),
-        model_probability=signal.model_probability,
-        market_price_at_entry=signal.market_probability,
-        edge_at_entry=signal.edge,
-        is_paper=True,
-    )
-
-    db.add(trade)
-    db.commit()
-
-    log_event("trade", f"Manual BTC trade: {signal.direction.upper()} {signal.market.slug}")
-    return {"status": "ok", "trade_id": trade.id, "size": trade.size}
+    raise HTTPException(status_code=404, detail="Signal not found")
 
 
 @app.post("/api/run-scan")
@@ -1000,6 +967,8 @@ async def reset_bot(db: Session = Depends(get_db)):
 
     try:
         trades_deleted = db.query(Trade).delete()
+        signals_deleted = db.query(Signal).delete()
+        scans_deleted = db.query(ScanLog).delete()
         state = db.query(BotState).first()
         current_bankroll = settings.INITIAL_BANKROLL
         from backend.data.kalshi_client import kalshi_credentials_present, KalshiClient
@@ -1024,11 +993,13 @@ async def reset_bot(db: Session = Depends(get_db)):
         ai_logs_deleted = db.query(AILog).delete()
         db.commit()
 
-        log_event("success", f"Bot reset: {trades_deleted} trades deleted. Fresh start with ${current_bankroll:,.2f}")
+        log_event("success", f"Bot reset: {trades_deleted} trades, {signals_deleted} signals deleted. Fresh start with ${current_bankroll:,.2f}")
 
         return {
             "status": "reset",
             "trades_deleted": trades_deleted,
+            "signals_deleted": signals_deleted,
+            "scans_deleted": scans_deleted,
             "ai_logs_deleted": ai_logs_deleted,
             "new_bankroll": current_bankroll
         }
@@ -1036,6 +1007,26 @@ async def reset_bot(db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Reset failed: {e}")
+
+
+@app.get("/api/paper-training/summary")
+async def get_paper_training_summary(paper_db: Session = Depends(get_paper_db)):
+    """Read-only summary of the isolated paper_training.db vault."""
+    total_trades = paper_db.query(Trade).count()
+    settled_trades = paper_db.query(Trade).filter(Trade.settled == True).all()
+    total_signals = paper_db.query(Signal).count()
+    wins = sum(1 for t in settled_trades if t.result == "win")
+    losses = sum(1 for t in settled_trades if t.result == "loss")
+    net_pnl = round(sum(t.pnl for t in settled_trades if t.pnl is not None), 2)
+    return {
+        "database": "paper_training.db",
+        "total_trades": total_trades,
+        "settled_trades": len(settled_trades),
+        "wins": wins,
+        "losses": losses,
+        "net_pnl": net_pnl,
+        "total_signals": total_signals,
+    }
 
 
 @app.get("/api/dashboard", response_model=DashboardData)

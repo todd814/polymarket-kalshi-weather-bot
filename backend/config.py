@@ -9,6 +9,7 @@ class Settings(BaseSettings):
 
     # Database (SQLite for Phase 1, PostgreSQL for production)
     DATABASE_URL: str = "sqlite:///./tradingbot.db"
+    PAPER_DATABASE_URL: str = "sqlite:///./paper_training.db"
 
     # API Keys (optional)
     POLYMARKET_API_KEY: Optional[str] = None
@@ -69,7 +70,9 @@ class Settings(BaseSettings):
     WEATHER_SETTLEMENT_INTERVAL_SECONDS: int = 1800  # 30 min
     WEATHER_MIN_EDGE_THRESHOLD: float = 0.08  # 8% — weather has more signal than 5-min BTC
     WEATHER_PAPER_MIN_EDGE_THRESHOLD: float = 0.03  # 3% — shadow paper trading hurdle for volume data collection
-    WEATHER_MAX_ENTRY_PRICE: float = 0.70
+    WEATHER_MIN_ENTRY_PRICE: float = 0.06  # 6c minimum floor for Threshold (-T) contracts
+    WEATHER_BRACKET_YES_MIN_PRICE: float = 0.12  # 12c minimum floor for Bracket (-B) YES contracts
+    WEATHER_MAX_ENTRY_PRICE: float = 0.68  # 68c ceiling (data science audit: >68c had negative expectancy)
     WEATHER_MAX_TRADE_SIZE: float = 5.0
     WEATHER_CITIES: str = "nyc,chicago,miami,los_angeles,denver,austin,houston,washington_dc,boston,philadelphia"
 

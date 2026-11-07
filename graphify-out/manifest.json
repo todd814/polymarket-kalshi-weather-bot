@@ -42,15 +42,15 @@
     "semantic_hash": "89ecbf2f075121f87be249dcbd0c9e2c"
   },
   "backend/api/main.py": {
-    "mtime": 1793931903.9118767,
-    "seen": 1793932340.548756,
-    "ast_hash": "a8652b3e1fcb971afc5fbe643db5e9a0",
+    "mtime": 1794087447.3568656,
+    "seen": 1794087717.616919,
+    "ast_hash": "3719f0f478b47b0ad597f64291e1ebc9",
     "semantic_hash": ""
   },
   "backend/config.py": {
-    "mtime": 1793814964.297435,
-    "seen": 1793815098.304854,
-    "ast_hash": "806fa413689de830c15bc65447eb34fa",
+    "mtime": 1794087188.5634918,
+    "seen": 1794087717.61692,
+    "ast_hash": "6a630982e7b8e6113cb97a2cb72bddf2",
     "semantic_hash": ""
   },
   "backend/core/__init__.py": {
@@ -60,15 +60,15 @@
     "semantic_hash": "872bd76ae95882dc93e879075dcb3af5"
   },
   "backend/core/scheduler.py": {
-    "mtime": 1793931941.2019153,
-    "seen": 1793932340.5487611,
-    "ast_hash": "5674a4ee38613b416fee3cbb0375d44c",
+    "mtime": 1794087507.7978718,
+    "seen": 1794087717.6169229,
+    "ast_hash": "8e1258408b6b18c020e4a5a6388bfd15",
     "semantic_hash": ""
   },
   "backend/core/settlement.py": {
-    "mtime": 1794003887.1615512,
-    "seen": 1794004275.950588,
-    "ast_hash": "361de48cdeeca6644e8db8b092c7f642",
+    "mtime": 1794087591.453753,
+    "seen": 1794087717.6169238,
+    "ast_hash": "b7eb0107ba32b9a7d4ae51102679040a",
     "semantic_hash": ""
   },
   "backend/core/signals.py": {
@@ -78,9 +78,9 @@
     "semantic_hash": "70665b5d620f0ff30c7f953e6cdb82c0"
   },
   "backend/core/weather_signals.py": {
-    "mtime": 1793989810.6554112,
-    "seen": 1793989847.2639081,
-    "ast_hash": "1f6bdcdc68081171ce2da718aed58f3f",
+    "mtime": 1794087257.8119252,
+    "seen": 1794087717.616926,
+    "ast_hash": "7060b8f04a37cb924300b4d3ecc8df69",
     "semantic_hash": ""
   },
   "backend/data/__init__.py": {
@@ -138,9 +138,9 @@
     "semantic_hash": "7ffe4e05066cb2ae3bf3266b9f247605"
   },
   "backend/models/database.py": {
-    "mtime": 1793376860.70897,
-    "seen": 1793454302.227107,
-    "ast_hash": "ba5b0dccbee531651c087068336b01ca",
+    "mtime": 1794087505.3450866,
+    "seen": 1794087717.616935,
+    "ast_hash": "b009156fc8f311bdc0d2ec483b1d497f",
     "semantic_hash": ""
   },
   "frontend/package.json": {
@@ -390,9 +390,9 @@
     "semantic_hash": "a053bbeab9573d02c5be6973f05bf787"
   },
   "test_c137_quant.py": {
-    "mtime": 1793377910.1776934,
-    "seen": 1793454302.227129,
-    "ast_hash": "2cf4d8d3ae5a17a1762766ed33a1289a",
+    "mtime": 1794087694.1927707,
+    "seen": 1794087717.616957,
+    "ast_hash": "726e48b12cc584be734b86105b3542c7",
     "semantic_hash": ""
   },
   "deploy_gcp.sh": {
@@ -414,15 +414,15 @@
     "semantic_hash": ""
   },
   "backend/core/hourly_scheduler.py": {
-    "mtime": 1793886935.8300672,
-    "seen": 1793932340.548759,
-    "ast_hash": "b2f6edf5e500b2b31fbbb2802f4b4e5a",
+    "mtime": 1794087304.0830653,
+    "seen": 1794087717.6169212,
+    "ast_hash": "a756ce44f69741a0ab20381a4009b385",
     "semantic_hash": ""
   },
   "backend/core/hourly_signals.py": {
-    "mtime": 1794003956.9874113,
-    "seen": 1794004275.950586,
-    "ast_hash": "e7a371c5e279e93dab015a922eec7d85",
+    "mtime": 1794087299.4799292,
+    "seen": 1794087717.6169221,
+    "ast_hash": "80e0185ee488aba17090864b12af73d0",
     "semantic_hash": ""
   },
   "backend/data/hourly_markets.py": {

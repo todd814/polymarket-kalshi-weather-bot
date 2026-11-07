@@ -9,7 +9,7 @@ import httpx
 from backend.config import settings
 from backend.core.hourly_signals import scan_for_hourly_signals, HourlySignal
 from backend.data.metar import fetch_metar_observations, CITY_STATIONS
-from backend.models.database import SessionLocal, Trade, Signal, BotState
+from backend.models.database import PaperSessionLocal, Trade, Signal, BotState
 
 logger = logging.getLogger("trading_bot")
 
@@ -82,7 +82,7 @@ async def hourly_scan_and_trade_job():
         if not actionable:
             return
 
-        db = SessionLocal()
+        db = PaperSessionLocal()
         try:
             state = db.query(BotState).first()
             if state and not state.is_running:
@@ -160,7 +160,7 @@ async def hourly_settlement_job():
     if not getattr(settings, "HOURLY_WEATHER_ENABLED", True):
         return
 
-    db = SessionLocal()
+    db = PaperSessionLocal()
     try:
         now = datetime.now(timezone.utc)
         pending_trades = db.query(Trade).filter(

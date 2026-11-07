@@ -14,6 +14,13 @@ engine = create_engine(
     connect_args={"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {}
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+paper_engine = create_engine(
+    settings.PAPER_DATABASE_URL,
+    connect_args={"check_same_thread": False} if "sqlite" in settings.PAPER_DATABASE_URL else {}
+)
+PaperSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=paper_engine)
+
 Base = declarative_base()
 
 
@@ -149,14 +156,16 @@ class ScanLog(Base):
 
 
 def init_db():
-    """Initialize database tables."""
+    """Initialize both Live Production and Paper Training database tables."""
     Base.metadata.create_all(bind=engine)
-    ensure_schema()
+    ensure_schema(engine)
+    Base.metadata.create_all(bind=paper_engine)
+    ensure_schema(paper_engine)
 
 
-def ensure_schema():
+def ensure_schema(target_engine=engine):
     """Ensure newer schema fields exist even if migration wasn't run."""
-    inspector = inspect(engine)
+    inspector = inspect(target_engine)
     try:
         columns = [col["name"] for col in inspector.get_columns("trades")]
     except Exception:
@@ -164,20 +173,20 @@ def ensure_schema():
 
     if "event_slug" not in columns:
         stmt = "ALTER TABLE trades ADD COLUMN event_slug VARCHAR"
-        if engine.dialect.name not in ("sqlite", "mysql"):
+        if target_engine.dialect.name not in ("sqlite", "mysql"):
             stmt = "ALTER TABLE trades ADD COLUMN IF NOT EXISTS event_slug VARCHAR"
 
-        with engine.connect() as conn:
+        with target_engine.connect() as conn:
             with conn.begin():
                 conn.execute(text(stmt))
 
     if "market_type" not in columns:
-        with engine.connect() as conn:
+        with target_engine.connect() as conn:
             with conn.begin():
                 conn.execute(text("ALTER TABLE trades ADD COLUMN market_type VARCHAR DEFAULT 'btc'"))
 
     if "is_paper" not in columns:
-        with engine.connect() as conn:
+        with target_engine.connect() as conn:
             with conn.begin():
                 conn.execute(text("ALTER TABLE trades ADD COLUMN is_paper BOOLEAN DEFAULT 0"))
 
@@ -188,7 +197,7 @@ def ensure_schema():
         signal_columns = []
 
     if signal_columns:
-        with engine.connect() as conn:
+        with target_engine.connect() as conn:
             for col, coltype in [
                 ("actual_outcome", "TEXT"),
                 ("outcome_correct", "BOOLEAN"),
@@ -206,9 +215,25 @@ def ensure_schema():
 
 
 def get_db():
-    """Get database session."""
+    """Get live production database session."""
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
+
+
+def get_paper_db():
+    """Get paper training database session."""
+    db = PaperSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# Ensure paper_training.db tables exist on module load
+try:
+    Base.metadata.create_all(bind=paper_engine)
+except Exception:
+    pass

@@ -9,7 +9,7 @@ from backend.core.seasonal_physics import CLIMATOLOGICAL_NORMALS_F, get_season_n
 from backend.core.signals import calculate_edge, calculate_kelly_size
 from backend.data.weather import fetch_ensemble_forecast, fetch_nws_observed_temperature, EnsembleForecast, CITY_CONFIG
 from backend.data.weather_markets import WeatherMarket, fetch_polymarket_weather_markets
-from backend.models.database import SessionLocal, Signal
+from backend.models.database import SessionLocal, PaperSessionLocal, Signal
 
 logger = logging.getLogger("trading_bot")
 
@@ -42,8 +42,9 @@ class WeatherTradingSignal:
 
     @property
     def passes_threshold(self) -> bool:
-        """Check if signal passes minimum edge threshold."""
-        return self.edge >= settings.WEATHER_MIN_EDGE_THRESHOLD and self.suggested_size > 0
+        """Check if signal passes minimum edge threshold (stricter 10% hurdle for LAX coastal & DEN mountain)."""
+        min_hurdle = 0.10 if self.market.city_key in ("los_angeles", "denver") else settings.WEATHER_MIN_EDGE_THRESHOLD
+        return self.edge >= min_hurdle and self.suggested_size > 0
 
 
 async def generate_weather_signal(
@@ -158,6 +159,15 @@ async def generate_weather_signal(
     if not is_permitted:
         edge = 0.0
         filter_notes.append(lockout_reason or "category locked")
+
+    min_entry_price = (
+        getattr(settings, "WEATHER_BRACKET_YES_MIN_PRICE", 0.12)
+        if (market.direction == "between" and direction == "yes")
+        else getattr(settings, "WEATHER_MIN_ENTRY_PRICE", 0.06)
+    )
+    if entry_price < min_entry_price:
+        edge = 0.0
+        filter_notes.append(f"entry {entry_price:.0%} < {min_entry_price:.0%} floor")
     if entry_price > settings.WEATHER_MAX_ENTRY_PRICE:
         edge = 0.0  # Zero out but still return for UI visibility
         filter_notes.append(f"entry {entry_price:.0%} > {settings.WEATHER_MAX_ENTRY_PRICE:.0%}")
@@ -181,8 +191,10 @@ async def generate_weather_signal(
             if _db is not None:
                 _db.close()
 
+    # Clamp effective edge at 25% for Kelly sizing (data science audit: 8-12% edge Brier=0.1795; >35% overconfident)
+    effective_edge = min(abs(edge), 0.25)
     suggested_size = calculate_kelly_size(
-        edge=abs(edge),
+        edge=effective_edge,
         probability=model_yes_prob,
         market_price=market_yes_prob,
         direction=direction_raw,  # calculate_kelly_size expects "up"/"down"
@@ -202,7 +214,8 @@ async def generate_weather_signal(
     clim_anomaly = mean_val - clim_norm
 
     # Build reasoning
-    filter_status = "ACTIONABLE" if (edge >= settings.WEATHER_MIN_EDGE_THRESHOLD and suggested_size > 0) else "FILTERED"
+    min_hurdle = 0.10 if market.city_key in ("los_angeles", "denver") else settings.WEATHER_MIN_EDGE_THRESHOLD
+    filter_status = "ACTIONABLE" if (edge >= min_hurdle and suggested_size > 0) else "FILTERED"
     filter_note = f" [{', '.join(filter_notes)}]" if filter_notes else ""
     if market.direction == "between":
         cap_val = getattr(market, "cap_f", None) or (market.threshold_f + 1.0)
@@ -320,12 +333,12 @@ async def scan_for_weather_signals() -> List[WeatherTradingSignal]:
 
 
 def _persist_weather_signals(signals: list):
-    """Save weather signals to DB for calibration tracking."""
+    """Save weather signals to DB for calibration tracking (Paper Training DB when in simulation mode)."""
     to_save = [s for s in signals if abs(s.edge) > 0]
     if not to_save:
         return
 
-    db = SessionLocal()
+    db = PaperSessionLocal() if settings.SIMULATION_MODE else SessionLocal()
     try:
         for signal in to_save:
             # Dedup: skip if already logged for this market

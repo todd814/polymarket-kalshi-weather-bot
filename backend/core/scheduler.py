@@ -8,7 +8,7 @@ from sqlalchemy import func
 import logging
 
 from backend.config import settings
-from backend.models.database import SessionLocal, Trade, BotState, Signal
+from backend.models.database import SessionLocal, PaperSessionLocal, Trade, BotState, Signal
 from backend.core.signals import scan_for_signals
 
 logging.basicConfig(level=logging.INFO)
@@ -225,208 +225,196 @@ async def weather_scan_and_trade_job():
             attempted_live_tickers = set()
             live_held_tickers = set()
 
-            # --- TRACK 1: TOP-TIER LIVE KALSHI DEMO TRADING ---
-            for signal in actionable:
-                # Check if we already have an active LIVE trade for this market
-                existing_live = db.query(Trade).filter(
-                    Trade.market_ticker == signal.market.market_id,
-                    Trade.settled == False,
-                    Trade.is_paper == False,
-                ).first()
+            # --- TRACK 1: TOP-TIER LIVE PRODUCTION KALSHI TRADING ---
+            # Only execute into the live production database (tradingbot.db) when live order execution
+            # is enabled (KALSHI_EXECUTE_DEMO_ORDERS=true or SIMULATION_MODE=false).
+            if settings.KALSHI_EXECUTE_DEMO_ORDERS or not settings.SIMULATION_MODE:
+                for signal in actionable:
+                    # Check if we already have an active LIVE trade for this market
+                    existing_live = db.query(Trade).filter(
+                        Trade.market_ticker == signal.market.market_id,
+                        Trade.settled == False,
+                        Trade.is_paper == False,
+                    ).first()
 
-                if existing_live:
-                    live_held_tickers.add(signal.market.market_id)
-                    continue
+                    if existing_live:
+                        live_held_tickers.add(signal.market.market_id)
+                        continue
 
-                if signal.suggested_size <= 0:
-                    continue
+                    if signal.suggested_size <= 0:
+                        continue
 
-                if trades_executed >= MAX_TRADES_PER_SCAN:
-                    break
+                    if trades_executed >= MAX_TRADES_PER_SCAN:
+                        break
 
-                if weather_pending >= MAX_WEATHER_ALLOCATION:
-                    log_event("info", f"Weather allocation limit reached: ${weather_pending:.0f}/${MAX_WEATHER_ALLOCATION:.0f}")
-                    break
+                    if weather_pending >= MAX_WEATHER_ALLOCATION:
+                        log_event("info", f"Weather allocation limit reached: ${weather_pending:.0f}/${MAX_WEATHER_ALLOCATION:.0f}")
+                        break
 
-                if state.bankroll < MIN_TRADE_SIZE:
-                    log_event("warning", f"Bankroll too low: ${state.bankroll:.2f}")
-                    break
+                    if state.bankroll < MIN_TRADE_SIZE:
+                        log_event("warning", f"Bankroll too low: ${state.bankroll:.2f}")
+                        break
 
-                attempted_live_tickers.add(signal.market.market_id)
-                trade_size = min(signal.suggested_size, settings.WEATHER_MAX_TRADE_SIZE)
-                trade_size = max(trade_size, MIN_TRADE_SIZE)
+                    attempted_live_tickers.add(signal.market.market_id)
+                    trade_size = min(signal.suggested_size, settings.WEATHER_MAX_TRADE_SIZE)
+                    trade_size = max(trade_size, MIN_TRADE_SIZE)
 
-                entry_price = signal.market.yes_price if signal.direction == "yes" else signal.market.no_price
+                    entry_price = signal.market.yes_price if signal.direction == "yes" else signal.market.no_price
 
-                # Live order execution on Kalshi Demo / Prod
-                kalshi_order_id = None
-                if getattr(signal.market, "platform", "") == "kalshi" and settings.KALSHI_EXECUTE_DEMO_ORDERS:
-                    from backend.data.kalshi_client import KalshiClient, kalshi_credentials_present
-                    if kalshi_credentials_present():
-                        try:
-                            k_client = KalshiClient()
-                            num_contracts = max(1, int(trade_size / entry_price))
-                            order_res = await k_client.create_order(
-                                ticker=signal.market.market_id,
-                                contract_type=signal.direction,
-                                count=num_contracts,
-                                price_dollars=entry_price,
-                            )
-                            order_obj = order_res.get("order", order_res) if isinstance(order_res, dict) else {}
-                            kalshi_order_id = order_obj.get("order_id") or (order_res.get("order_id") if isinstance(order_res, dict) else None)
-                            raw_fill = (
-                                order_obj.get("fill_count")
-                                or order_obj.get("fill_count_fp")
-                                or (order_res.get("fill_count") if isinstance(order_res, dict) else 0)
-                                or (order_res.get("fill_count_fp") if isinstance(order_res, dict) else 0)
-                                or 0
-                            )
-                            filled_contracts = float(raw_fill or 0)
-                            if filled_contracts <= 0:
-                                log_event(
-                                    "info",
-                                    f"Kalshi IOC order unfilled (0/{num_contracts} contracts) on {signal.market.market_id}; skipping phantom trade",
-                                    order_res if isinstance(order_res, dict) else {},
+                    # Live order execution on Kalshi Prod
+                    kalshi_order_id = None
+                    if getattr(signal.market, "platform", "") == "kalshi":
+                        from backend.data.kalshi_client import KalshiClient, kalshi_credentials_present
+                        if kalshi_credentials_present():
+                            try:
+                                k_client = KalshiClient()
+                                num_contracts = max(1, int(trade_size / entry_price))
+                                order_res = await k_client.create_order(
+                                    ticker=signal.market.market_id,
+                                    contract_type=signal.direction,
+                                    count=num_contracts,
+                                    price_dollars=entry_price,
                                 )
+                                order_obj = order_res.get("order", order_res) if isinstance(order_res, dict) else {}
+                                kalshi_order_id = order_obj.get("order_id") or (order_res.get("order_id") if isinstance(order_res, dict) else None)
+                                raw_fill = (
+                                    order_obj.get("fill_count")
+                                    or order_obj.get("fill_count_fp")
+                                    or (order_res.get("fill_count") if isinstance(order_res, dict) else 0)
+                                    or (order_res.get("fill_count_fp") if isinstance(order_res, dict) else 0)
+                                    or 0
+                                )
+                                filled_contracts = float(raw_fill or 0)
+                                if filled_contracts <= 0:
+                                    log_event(
+                                        "info",
+                                        f"Kalshi IOC order unfilled (0/{num_contracts} contracts) on {signal.market.market_id}; skipping phantom trade",
+                                        order_res if isinstance(order_res, dict) else {},
+                                    )
+                                    continue
+                                trade_size = round(filled_contracts * entry_price, 2)
+                                log_event("trade", f"KALSHI LIVE ORDER FILLED: {kalshi_order_id} | {filled_contracts:g}x {signal.direction.upper()} on {signal.market.market_id}", order_res)
+                            except Exception as e:
+                                log_event("error", f"Kalshi order placement error: {e}")
                                 continue
-                            trade_size = round(filled_contracts * entry_price, 2)
-                            log_event("trade", f"KALSHI DEMO ORDER FILLED: {kalshi_order_id} | {filled_contracts:g}x {signal.direction.upper()} on {signal.market.market_id}", order_res)
-                        except Exception as e:
-                            log_event("error", f"Kalshi order placement error: {e}")
-                            continue
 
-                trade = Trade(
-                    market_ticker=signal.market.market_id,
-                    platform=getattr(signal.market, "platform", "kalshi"),
-                    event_slug=signal.market.slug,
-                    market_type="weather",
-                    direction=signal.direction,
-                    entry_price=entry_price,
-                    size=trade_size,
-                    model_probability=signal.model_probability,
-                    market_price_at_entry=signal.market_probability,
-                    edge_at_entry=signal.edge,
-                    is_paper=False,
-                )
+                    trade = Trade(
+                        market_ticker=signal.market.market_id,
+                        platform=getattr(signal.market, "platform", "kalshi"),
+                        event_slug=signal.market.slug,
+                        market_type="weather",
+                        direction=signal.direction,
+                        entry_price=entry_price,
+                        size=trade_size,
+                        model_probability=signal.model_probability,
+                        market_price_at_entry=signal.market_probability,
+                        edge_at_entry=signal.edge,
+                        is_paper=False,
+                    )
 
-                db.add(trade)
-                db.flush()
+                    db.add(trade)
+                    db.flush()
 
-                # Clean up any prior shadow paper trade for this market since live trade has executed
-                existing_paper = db.query(Trade).filter(
-                    Trade.market_ticker == signal.market.market_id,
-                    Trade.settled == False,
-                    Trade.is_paper == True,
-                ).first()
-                if existing_paper:
-                    db.delete(existing_paper)
+                    # Link to signal record
+                    matching_signal = db.query(Signal).filter(
+                        Signal.market_ticker == signal.market.market_id,
+                        Signal.market_type == "weather",
+                        Signal.executed == False,
+                    ).order_by(Signal.timestamp.desc()).first()
+                    if matching_signal:
+                        matching_signal.executed = True
+                        matching_signal.is_paper = False
+                        trade.signal_id = matching_signal.id
 
-                # Link to signal record
-                matching_signal = db.query(Signal).filter(
-                    Signal.market_ticker == signal.market.market_id,
-                    Signal.market_type == "weather",
-                    Signal.executed == False,
-                ).order_by(Signal.timestamp.desc()).first()
-                if matching_signal:
-                    matching_signal.executed = True
-                    matching_signal.is_paper = False
-                    trade.signal_id = matching_signal.id
+                    state.total_trades += 1
+                    trades_executed += 1
+                    weather_pending += trade_size
 
-                state.total_trades += 1
-                trades_executed += 1
-                weather_pending += trade_size
+                    log_event("trade",
+                        f"WX [LIVE] {signal.market.city_name}: {signal.direction.upper()} "
+                        f"${trade_size:.0f} @ {entry_price:.0%} | "
+                        f"{signal.market.metric} {signal.market.direction} {signal.market.threshold_f:.0f}F",
+                        {
+                            "slug": signal.market.slug,
+                            "direction": signal.direction,
+                            "size": trade_size,
+                            "edge": signal.edge,
+                            "entry_price": entry_price,
+                            "city": signal.market.city_name,
+                            "is_paper": False,
+                        }
+                    )
 
-                log_event("trade",
-                    f"WX [LIVE] {signal.market.city_name}: {signal.direction.upper()} "
-                    f"${trade_size:.0f} @ {entry_price:.0%} | "
-                    f"{signal.market.metric} {signal.market.direction} {signal.market.threshold_f:.0f}F",
-                    {
-                        "slug": signal.market.slug,
-                        "direction": signal.direction,
-                        "size": trade_size,
-                        "edge": signal.edge,
-                        "entry_price": entry_price,
-                        "city": signal.market.city_name,
-                        "is_paper": False,
-                    }
-                )
-
-            # --- TRACK 2: SHADOW PAPER WEATHER TRADING (HIGH-VOLUME DATA HARVESTING) ---
-            # Paper trades record for all actionable signals above lower hurdle (e.g. edge >= 3%),
-            # allowing high-volume data collection across all weather markets without consuming live bankroll.
+            # --- TRACK 2: SHADOW PAPER WEATHER TRAINING (ISOLATED IN paper_training.db) ---
+            # Paper training trades are stored exclusively in PaperSessionLocal (paper_training.db)
+            # so they never pollute the live production database or live dashboard UI.
             paper_hurdle = getattr(settings, "WEATHER_PAPER_MIN_EDGE_THRESHOLD", 0.03)
-            for signal in signals:
-                ticker = signal.market.market_id
-                if ticker in attempted_live_tickers or ticker in live_held_tickers:
-                    continue
+            paper_db = PaperSessionLocal()
+            try:
+                for signal in signals:
+                    ticker = signal.market.market_id
+                    if ticker in attempted_live_tickers or ticker in live_held_tickers:
+                        continue
 
-                if signal.edge < paper_hurdle:
-                    continue
+                    if signal.edge < paper_hurdle:
+                        continue
 
-                entry_price = signal.market.yes_price if signal.direction == "yes" else signal.market.no_price
-                if entry_price <= 0.0 or entry_price >= 1.0:
-                    continue
+                    entry_price = signal.market.yes_price if signal.direction == "yes" else signal.market.no_price
+                    if entry_price <= 0.0 or entry_price >= 1.0:
+                        continue
 
-                # Check if trade already exists
-                existing_paper = db.query(Trade).filter(
-                    Trade.market_ticker == ticker,
-                    Trade.settled == False,
-                ).first()
-                if existing_paper:
-                    continue
+                    # Check if trade already exists in paper_training.db
+                    existing_paper = paper_db.query(Trade).filter(
+                        Trade.market_ticker == ticker,
+                        Trade.settled == False,
+                    ).first()
+                    if existing_paper:
+                        continue
 
-                paper_size = 5.0  # Standard simulated contract size ($5)
-                paper_trade = Trade(
-                    market_ticker=ticker,
-                    platform=getattr(signal.market, "platform", "kalshi"),
-                    event_slug=signal.market.slug,
-                    market_type="weather",
-                    direction=signal.direction,
-                    entry_price=entry_price,
-                    size=paper_size,
-                    model_probability=signal.model_probability,
-                    market_price_at_entry=signal.market_probability,
-                    edge_at_entry=signal.edge,
-                    is_paper=True,
-                )
+                    paper_size = 5.0  # Standard simulated contract size ($5)
+                    paper_trade = Trade(
+                        market_ticker=ticker,
+                        platform=getattr(signal.market, "platform", "kalshi"),
+                        event_slug=signal.market.slug,
+                        market_type="weather",
+                        direction=signal.direction,
+                        entry_price=entry_price,
+                        size=paper_size,
+                        model_probability=signal.model_probability,
+                        market_price_at_entry=signal.market_probability,
+                        edge_at_entry=signal.edge,
+                        is_paper=True,
+                    )
 
-                db.add(paper_trade)
-                db.flush()
+                    paper_db.add(paper_trade)
+                    paper_db.flush()
 
-                # Link to signal record
-                matching_sig = db.query(Signal).filter(
-                    Signal.market_ticker == ticker,
-                    Signal.market_type == "weather",
-                    Signal.executed == False,
-                ).order_by(Signal.timestamp.desc()).first()
-                if matching_sig:
-                    matching_sig.executed = True
-                    matching_sig.is_paper = True
-                    paper_trade.signal_id = matching_sig.id
+                    # Link to signal record in paper_training.db
+                    matching_sig = paper_db.query(Signal).filter(
+                        Signal.market_ticker == ticker,
+                        Signal.market_type == "weather",
+                        Signal.executed == False,
+                    ).order_by(Signal.timestamp.desc()).first()
+                    if matching_sig:
+                        matching_sig.executed = True
+                        matching_sig.is_paper = True
+                        paper_trade.signal_id = matching_sig.id
 
-                paper_trades_executed += 1
-                log_event("trade",
-                    f"WX [PAPER] {signal.market.city_name}: {signal.direction.upper()} "
-                    f"${paper_size:.0f} @ {entry_price:.0%} (Edge: {signal.edge:+.1%}) | "
-                    f"{signal.market.metric} {signal.market.direction} {signal.market.threshold_f:.0f}F",
-                    {
-                        "slug": signal.market.slug,
-                        "direction": signal.direction,
-                        "size": paper_size,
-                        "edge": signal.edge,
-                        "entry_price": entry_price,
-                        "city": signal.market.city_name,
-                        "is_paper": True,
-                    }
-                )
+                    paper_trades_executed += 1
+
+                paper_db.commit()
+            finally:
+                paper_db.close()
 
             state.last_run = datetime.utcnow()
             db.commit()
 
-            if trades_executed > 0 or paper_trades_executed > 0:
-                log_event("success", f"Executed {trades_executed} live weather trade(s), {paper_trades_executed} paper trade(s)")
+            if trades_executed > 0:
+                log_event("success", f"Executed {trades_executed} live weather trade(s)")
+            elif not settings.SIMULATION_MODE:
+                log_event("info", "No new live weather trades executed")
             else:
-                log_event("info", "No new weather trades executed")
+                logger.info(f"Weather scan complete (SIMULATION_MODE=true; {paper_trades_executed} training trades logged to paper_training.db)")
 
         finally:
             db.close()
@@ -450,36 +438,44 @@ async def settlement_job():
         try:
             pending_count = db.query(Trade).filter(Trade.settled == False).count()
 
-            if pending_count == 0:
-                log_event("data", "No pending trades to settle")
-                return
+            if pending_count > 0:
+                log_event("data", f"Processing {pending_count} pending live trades")
+                settled = await settle_pending_trades(db)
 
-            log_event("data", f"Processing {pending_count} pending trades")
+                if settled:
+                    await update_bot_state_with_settlements(db, settled)
 
-            settled = await settle_pending_trades(db)
+                    wins = sum(1 for t in settled if t.result == "win")
+                    losses = sum(1 for t in settled if t.result == "loss")
+                    total_pnl = sum(t.pnl for t in settled if t.pnl is not None)
 
-            if settled:
-                await update_bot_state_with_settlements(db, settled)
+                    log_event("success", f"Settled {len(settled)} live trades: {wins}W/{losses}L, P&L: ${total_pnl:.2f}", {
+                        "settled_count": len(settled),
+                        "wins": wins,
+                        "losses": losses,
+                        "pnl": total_pnl
+                    })
 
-                wins = sum(1 for t in settled if t.result == "win")
-                losses = sum(1 for t in settled if t.result == "loss")
-                total_pnl = sum(t.pnl for t in settled if t.pnl is not None)
-
-                log_event("success", f"Settled {len(settled)} trades: {wins}W/{losses}L, P&L: ${total_pnl:.2f}", {
-                    "settled_count": len(settled),
-                    "wins": wins,
-                    "losses": losses,
-                    "pnl": total_pnl
-                })
-
-                for trade in settled:
-                    result_prefix = "+" if trade.pnl and trade.pnl > 0 else ""
-                    log_event("data", f"  {trade.event_slug}: {trade.result.upper()} {result_prefix}${trade.pnl:.2f}")
-            else:
-                log_event("info", "No trades ready for settlement")
-
+                    for trade in settled:
+                        result_prefix = "+" if trade.pnl and trade.pnl > 0 else ""
+                        log_event("data", f"  {trade.event_slug}: {trade.result.upper()} {result_prefix}${trade.pnl:.2f}")
         finally:
             db.close()
+
+        # Also settle pending paper training trades inside paper_training.db silently
+        paper_db = PaperSessionLocal()
+        try:
+            paper_pending = paper_db.query(Trade).filter(
+                Trade.settled == False,
+                Trade.market_type != "weather_hourly",
+            ).count()
+            if paper_pending > 0:
+                paper_settled = await settle_pending_trades(paper_db)
+                if paper_settled:
+                    paper_db.commit()
+                    logger.info(f"Settled {len(paper_settled)} daily paper training trades in paper_training.db")
+        finally:
+            paper_db.close()
 
     except Exception as e:
         log_event("error", f"Settlement error: {str(e)}")

@@ -249,19 +249,19 @@ def evaluate_hourly_market(
     # Minimum edge hurdle: stricter for LAX coastal station & general nighttime
     min_hurdle = 0.10 if market.city_key == "los_angeles" else (0.09 if is_night else 0.05)
 
-    # YES Evaluation with 24/7 Anti-Penny Tail Protection (>= $0.12)
-    if yes_ask is not None and yes_ask >= 0.12:
+    # YES Evaluation with 24/7 Price Collar ($0.12 to $0.68)
+    if yes_ask is not None and 0.12 <= yes_ask <= 0.68:
         edge_yes = model_prob - yes_ask
-        # Preventative Rule 1: Ban buying YES on strikes above current temp at night
-        is_forbidden_night_yes = is_night and (market.threshold_f > current_t)
+        # Preventative Rule 1: Ban buying YES at night unless expected_t after cooling stays >= 0.5F above strike
+        is_forbidden_night_yes = is_night and (market.threshold_f > (expected_t - 0.5))
         if edge_yes >= min_hurdle and not is_forbidden_night_yes:
             if edge_yes > best_edge:
                 best_edge = edge_yes
                 best_direction = "yes"
                 market_price = yes_ask
 
-    # NO Evaluation with 24/7 Anti-Penny Tail Protection (>= $0.12)
-    if no_ask is not None and no_ask >= 0.12:
+    # NO Evaluation with 24/7 Price Collar ($0.12 to $0.68)
+    if no_ask is not None and 0.12 <= no_ask <= 0.68:
         edge_no = (1.0 - model_prob) - no_ask
         if edge_no >= min_hurdle:
             if edge_no > best_edge:
