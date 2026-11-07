@@ -494,6 +494,20 @@ async def heartbeat_job():
             log_event("warning", "Heartbeat: Bot state not initialized")
             return
 
+        if settings.KALSHI_SYNC_BALANCE:
+            try:
+                from backend.data.kalshi_client import KalshiClient, kalshi_credentials_present
+                if kalshi_credentials_present():
+                    bal_data = await KalshiClient().get_balance()
+                    if bal_data.get("balance_dollars") is not None:
+                        state.bankroll = float(bal_data["balance_dollars"])
+                        db.commit()
+                    elif bal_data.get("balance") is not None:
+                        state.bankroll = float(bal_data["balance"]) / 100.0
+                        db.commit()
+            except Exception as sync_err:
+                logger.debug(f"Heartbeat Kalshi balance sync skipped: {sync_err}")
+
         log_event("data", f"Heartbeat: {pending} pending trades, bankroll: ${state.bankroll:.2f}", {
             "pending_trades": pending,
             "bankroll": state.bankroll,
