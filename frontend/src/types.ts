@@ -159,6 +159,25 @@ export interface HourlySignal {
   reasoning: string
 }
 
+export interface KalshiTierItem {
+  name: string
+  contracts_required: number
+  is_current: boolean
+}
+
+export interface KalshiTierInfo {
+  current_tier: string
+  usage_tier_key: string
+  next_tier: string
+  contracts_30d: number
+  next_tier_target: number
+  progress_pct: number
+  progress_display: string
+  read_limit: number
+  write_limit: number
+  tiers: KalshiTierItem[]
+}
+
 export interface DashboardData {
   stats: BotStats
   btc_price: BtcPrice | null
@@ -170,4 +189,5 @@ export interface DashboardData {
   calibration: CalibrationSummary | null
   weather_signals: WeatherSignal[]
   weather_forecasts: WeatherForecast[]
+  kalshi_tier?: KalshiTierInfo | null
 }

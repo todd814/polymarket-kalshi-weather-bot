@@ -222,6 +222,7 @@ class DashboardData(BaseModel):
     calibration: Optional[CalibrationSummary] = None
     weather_signals: List[WeatherSignalResponse] = []
     weather_forecasts: List[WeatherForecastResponse] = []
+    kalshi_tier: Optional[dict] = None
 
 
 class EventResponse(BaseModel):
@@ -753,6 +754,14 @@ async def get_kalshi_status():
     }
 
 
+@app.get("/api/kalshi/tier")
+async def get_kalshi_tier():
+    """Read-only telemetry for Kalshi API tier and 30d contract progression."""
+    from backend.data.kalshi_client import KalshiClient
+    client = KalshiClient()
+    return await client.get_api_tier_info()
+
+
 # Weather endpoints
 @app.get("/api/weather/forecasts", response_model=List[WeatherForecastResponse])
 async def get_weather_forecasts():
@@ -1178,6 +1187,13 @@ async def get_dashboard(db: Session = Depends(get_db)):
         except Exception:
             pass
 
+    kalshi_tier_data = None
+    try:
+        from backend.data.kalshi_client import KalshiClient
+        kalshi_tier_data = await KalshiClient().get_api_tier_info()
+    except Exception:
+        pass
+
     return DashboardData(
         stats=stats,
         btc_price=btc_price_data,
@@ -1189,6 +1205,7 @@ async def get_dashboard(db: Session = Depends(get_db)):
         calibration=calibration,
         weather_signals=weather_signals_data,
         weather_forecasts=weather_forecasts_data,
+        kalshi_tier=kalshi_tier_data,
     )
 
 

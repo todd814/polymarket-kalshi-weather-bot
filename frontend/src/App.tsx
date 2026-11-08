@@ -11,7 +11,7 @@ import { CalibrationPanel } from './components/CalibrationPanel'
 import { WeatherPanel } from './components/WeatherPanel'
 import { EdgeDistribution } from './components/EdgeDistribution'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import type { WeatherForecast, WeatherSignal, MetarObservation, HourlySignal } from './types'
+import type { WeatherForecast, WeatherSignal, MetarObservation, HourlySignal, KalshiTierInfo } from './types'
 
 const GlobeView = lazy(() => import('./components/GlobeView').then(m => ({ default: m.GlobeView })))
 
@@ -206,6 +206,87 @@ function HourlyWindowPill({ signal, onSimulateTrade, isSimulating }: {
   )
 }
 
+function KalshiTierPanel({ tier }: { tier: KalshiTierInfo | null }) {
+  const info: KalshiTierInfo = tier ?? {
+    current_tier: 'Basic',
+    usage_tier_key: 'basic',
+    next_tier: 'Expert',
+    contracts_30d: 252.37,
+    next_tier_target: 146673898.51,
+    progress_pct: 0,
+    progress_display: '0%',
+    read_limit: 200,
+    write_limit: 100,
+    tiers: [
+      { name: 'Basic', contracts_required: 0, is_current: true },
+      { name: 'Expert', contracts_required: 146673898.51, is_current: false },
+      { name: 'Premier', contracts_required: 244456497.52, is_current: false },
+      { name: 'Paragon', contracts_required: 488912995.05, is_current: false },
+      { name: 'Prime', contracts_required: 977825990.11, is_current: false },
+      { name: 'Prestige', contracts_required: 1955651980.23, is_current: false },
+    ],
+  }
+
+  return (
+    <div className="shrink-0 border-b border-neutral-800 px-2.5 py-2 font-mono">
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-neutral-400 uppercase tracking-wider font-bold">API Tier</span>
+          <span className="px-1.5 py-0.2 text-[9px] font-bold uppercase bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+            {info.current_tier}
+          </span>
+        </div>
+        <span
+          className="text-[8px] text-neutral-500 bg-neutral-900 border border-neutral-800 px-1 py-0.2 uppercase"
+          title="Strictly read-only telemetry. Trading engine never chases volume tiers."
+        >
+          No-Churn Lock
+        </span>
+      </div>
+
+      <div className="text-[10px] text-neutral-300 mb-1.5">
+        You&apos;re at the <span className="text-neutral-100 font-bold">{info.current_tier}</span> tier.
+        <span className="text-[9px] text-neutral-500 ml-1.5 tabular-nums">
+          ({info.read_limit}R/{info.write_limit}W tok/s)
+        </span>
+      </div>
+
+      <div className="mb-1.5">
+        <div className="flex items-center justify-between text-[9px] mb-0.5">
+          <span className="text-neutral-400">Progress to {info.next_tier}</span>
+          <span className="text-cyan-400 font-bold tabular-nums">{info.progress_display}</span>
+        </div>
+        <div className="w-full h-1.5 bg-neutral-900 border border-neutral-800 overflow-hidden mb-1">
+          <div
+            className="h-full bg-cyan-500 transition-all duration-300"
+            style={{ width: `${Math.max(1, Math.min(100, info.progress_pct))}%` }}
+          />
+        </div>
+        <div className="text-[9px] text-neutral-400 tabular-nums">
+          {info.contracts_30d.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} /{' '}
+          {info.next_tier_target.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} contracts (30d)
+        </div>
+      </div>
+
+      <div className="border-t border-neutral-900 pt-1 mt-1 space-y-0.5">
+        <div className="text-[8px] text-neutral-500 uppercase tracking-wider mb-0.5">Tiers</div>
+        {info.tiers.map(t => (
+          <div key={t.name} className="flex items-center justify-between text-[9px] leading-tight">
+            <span className={t.is_current ? 'text-cyan-400 font-bold' : 'text-neutral-400'}>
+              {t.name}
+            </span>
+            <span className={`tabular-nums ${t.is_current ? 'text-cyan-400 font-bold' : 'text-neutral-500'}`}>
+              {t.is_current
+                ? 'Your current tier'
+                : `${t.contracts_required.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} contracts`}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function RefreshBar({ interval }: { interval: number }) {
   const [progress, setProgress] = useState(100)
 
@@ -285,6 +366,7 @@ function App() {
   }
   const equityCurve = data?.equity_curve ?? []
   const calibration = data?.calibration ?? null
+  const kalshiTier = data?.kalshi_tier ?? null
 
   const actionableCount = weatherSignals.filter(s => s.actionable).length + hourlySignals.filter(s => s.actionable).length
 
@@ -340,7 +422,7 @@ function App() {
             {stats.is_running ? 'Live' : 'Idle'}
           </span>
           <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-            Paper + Prod Shadow
+            Kalshi Prod Live
           </span>
         </div>
 
@@ -368,7 +450,7 @@ function App() {
         {/* ===== LEFT COLUMN ===== */}
         <div className="flex flex-col border-r border-neutral-800 min-h-0 overflow-hidden">
           {/* Equity chart */}
-          <div className="border-b border-neutral-800" style={{ height: '35%', minHeight: '140px' }}>
+          <div className="border-b border-neutral-800" style={{ height: '30%', minHeight: '130px' }}>
             <div className="px-2 py-1 border-b border-neutral-800 flex items-center justify-between shrink-0">
               <span className="text-[10px] text-neutral-500 uppercase tracking-wider">Equity Curve</span>
               <span className={`text-[10px] tabular-nums ${stats.total_pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
@@ -379,6 +461,9 @@ function App() {
               <EquityChart data={equityCurve} initialBankroll={stats.bankroll - stats.total_pnl} />
             </div>
           </div>
+
+          {/* Kalshi API Tier & 30d Volume Telemetry */}
+          <KalshiTierPanel tier={kalshiTier} />
 
           {/* Calibration */}
           {calibration && calibration.total_with_outcome > 0 && (

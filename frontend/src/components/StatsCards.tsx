@@ -16,7 +16,7 @@ export function StatsCards({ stats }: Props) {
       <motion.div className="flex items-center gap-1.5" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
         <span className="text-[10px] text-neutral-600 uppercase">Bank</span>
         <span className="text-sm font-semibold tabular-nums text-neutral-100">
-          ${stats.bankroll >= 1000 ? (stats.bankroll / 1000).toFixed(1) + 'K' : stats.bankroll.toFixed(0)}
+          ${stats.bankroll >= 1000 ? (stats.bankroll / 1000).toFixed(1) + 'K' : stats.bankroll.toFixed(2)}
         </span>
       </motion.div>
 

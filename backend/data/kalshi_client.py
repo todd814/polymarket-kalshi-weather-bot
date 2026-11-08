@@ -189,6 +189,92 @@ class KalshiClient:
             raise ValueError("Kalshi credentials (KALSHI_API_KEY_ID, KALSHI_PRIVATE_KEY_PATH) required to check balance")
         return await self.get("/portfolio/balance")
 
+    async def get_api_tier_info(self, force_refresh: bool = False) -> dict:
+        """
+        Fetch read-only Kalshi API usage tier, token-bucket limits, and 30d contract volume.
+        Cached for 60s to avoid consuming read token budget.
+        Strictly observational: never used to influence trading decisions or contract sizing.
+        """
+        now = time.time()
+        if not force_refresh and _API_TIER_CACHE["data"] and (now - _API_TIER_CACHE["ts"] < 60.0):
+            return _API_TIER_CACHE["data"]
+
+        tiers_ladder = [
+            {"key": "basic", "name": "Basic", "contracts_required": 0.0},
+            {"key": "expert", "name": "Expert", "contracts_required": 146673898.51},
+            {"key": "premier", "name": "Premier", "contracts_required": 244456497.52},
+            {"key": "paragon", "name": "Paragon", "contracts_required": 488912995.05},
+            {"key": "prime", "name": "Prime", "contracts_required": 977825990.11},
+            {"key": "prestige", "name": "Prestige", "contracts_required": 1955651980.23},
+        ]
+
+        usage_tier_key = "basic"
+        read_limit = 200
+        write_limit = 100
+        contracts_30d = 0.0
+
+        if kalshi_credentials_present():
+            try:
+                limits = await self.get("/account/limits")
+                usage_tier_key = str(limits.get("usage_tier", "basic")).lower()
+                read_limit = int(limits.get("read", {}).get("refill_rate", 200))
+                write_limit = int(limits.get("write", {}).get("refill_rate", 100))
+            except Exception as e:
+                logger.debug(f"Could not fetch Kalshi /account/limits: {e}")
+
+            try:
+                min_ts = int(now - 30 * 86400)
+                fills_resp = await self.get("/portfolio/fills", params={"limit": 1000, "min_ts": min_ts})
+                fills = fills_resp.get("fills", [])
+                contracts_30d = round(sum(float(f.get("count_fp", 0.0)) for f in fills), 2)
+            except Exception as e:
+                logger.debug(f"Could not fetch Kalshi /portfolio/fills for 30d volume: {e}")
+
+        # Map current and next tier
+        tier_names = {t["key"]: t["name"] for t in tiers_ladder}
+        current_tier_name = tier_names.get(usage_tier_key, usage_tier_key.capitalize())
+
+        next_tier_name = "Expert"
+        next_tier_target = 146673898.51
+        for idx, t in enumerate(tiers_ladder):
+            if t["key"] == usage_tier_key:
+                if idx + 1 < len(tiers_ladder):
+                    next_tier_name = tiers_ladder[idx + 1]["name"]
+                    next_tier_target = tiers_ladder[idx + 1]["contracts_required"]
+                else:
+                    next_tier_name = "Max Tier"
+                    next_tier_target = t["contracts_required"]
+                break
+
+        progress_pct = round(min(100.0, (contracts_30d / next_tier_target) * 100.0), 6) if next_tier_target > 0 else 100.0
+        progress_display = f"{int(progress_pct)}%" if progress_pct < 1.0 else f"{progress_pct:.1f}%"
+
+        data = {
+            "current_tier": current_tier_name,
+            "usage_tier_key": usage_tier_key,
+            "next_tier": next_tier_name,
+            "contracts_30d": contracts_30d,
+            "next_tier_target": next_tier_target,
+            "progress_pct": progress_pct,
+            "progress_display": progress_display,
+            "read_limit": read_limit,
+            "write_limit": write_limit,
+            "tiers": [
+                {
+                    "name": t["name"],
+                    "contracts_required": t["contracts_required"],
+                    "is_current": t["key"] == usage_tier_key,
+                }
+                for t in tiers_ladder
+            ],
+        }
+        _API_TIER_CACHE["data"] = data
+        _API_TIER_CACHE["ts"] = now
+        return data
+
+
+_API_TIER_CACHE: Dict[str, Any] = {"data": None, "ts": 0.0}
+
 
 def kalshi_credentials_present() -> bool:
     """Check if Kalshi API credentials are configured."""
