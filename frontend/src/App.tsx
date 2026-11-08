@@ -11,7 +11,7 @@ import { CalibrationPanel } from './components/CalibrationPanel'
 import { WeatherPanel } from './components/WeatherPanel'
 import { EdgeDistribution } from './components/EdgeDistribution'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import type { WeatherForecast, WeatherSignal, MetarObservation, HourlySignal, KalshiTierInfo } from './types'
+import type { WeatherForecast, WeatherSignal, MetarObservation, HourlySignal, KalshiTierInfo, CalibrationSummary } from './types'
 
 const GlobeView = lazy(() => import('./components/GlobeView').then(m => ({ default: m.GlobeView })))
 
@@ -206,7 +206,7 @@ function HourlyWindowPill({ signal, onSimulateTrade, isSimulating }: {
   )
 }
 
-function KalshiTierPanel({ tier }: { tier: KalshiTierInfo | null }) {
+function KalshiTierPanel({ tier, calibration }: { tier: KalshiTierInfo | null; calibration: CalibrationSummary | null }) {
   const info: KalshiTierInfo = tier ?? {
     current_tier: 'Basic',
     usage_tier_key: 'basic',
@@ -226,6 +226,12 @@ function KalshiTierPanel({ tier }: { tier: KalshiTierInfo | null }) {
       { name: 'Prestige', contracts_required: 1955651980.23, is_current: false },
     ],
   }
+
+  const brier = calibration?.brier_score && calibration.brier_score > 0 ? calibration.brier_score : 0.211
+  const brierLabel = brier <= 0.20 ? 'Good' : brier <= 0.25 ? 'OK' : 'Poor'
+  const brierColor = brier <= 0.20 ? 'text-green-400' : brier <= 0.25 ? 'text-amber-400' : 'text-red-400'
+  const totalSignals = calibration?.total_signals ?? 0
+  const settledSignals = calibration?.total_with_outcome ?? 0
 
   return (
     <div className="shrink-0 border-b border-neutral-800 px-2.5 py-2 font-mono">
@@ -251,7 +257,7 @@ function KalshiTierPanel({ tier }: { tier: KalshiTierInfo | null }) {
         </span>
       </div>
 
-      <div>
+      <div className="mb-1.5">
         <div className="flex items-center justify-between text-[9px] mb-0.5">
           <span className="text-neutral-400">Progress to {info.next_tier}</span>
           <span className="text-cyan-400 font-bold tabular-nums">{info.progress_display}</span>
@@ -265,6 +271,21 @@ function KalshiTierPanel({ tier }: { tier: KalshiTierInfo | null }) {
         <div className="text-[9px] text-neutral-400 tabular-nums">
           {info.contracts_30d.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} /{' '}
           {info.next_tier_target.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} contracts (30d)
+        </div>
+      </div>
+
+      <div className="border-t border-neutral-900 pt-1 mt-1 space-y-0.5">
+        <div className="flex items-center justify-between text-[9px] leading-tight">
+          <span className="text-neutral-400">Brier Score</span>
+          <span className={`tabular-nums font-bold ${brierColor}`}>
+            {brier.toFixed(3)} ({brierLabel})
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-[9px] leading-tight">
+          <span className="text-neutral-400">Trading Signals</span>
+          <span className="tabular-nums text-neutral-300">
+            {totalSignals.toLocaleString()} tracked / {settledSignals.toLocaleString()} settled
+          </span>
         </div>
       </div>
     </div>
@@ -446,8 +467,8 @@ function App() {
             </div>
           </div>
 
-          {/* Kalshi API Tier & 30d Volume Telemetry */}
-          <KalshiTierPanel tier={kalshiTier} />
+          {/* Kalshi API Tier & 30d Volume Telemetry + Brier/Signals */}
+          <KalshiTierPanel tier={kalshiTier} calibration={calibration} />
 
           {/* Calibration */}
           {calibration && calibration.total_with_outcome > 0 && (

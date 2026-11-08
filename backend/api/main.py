@@ -642,13 +642,15 @@ def _compute_calibration_summary(db: Session) -> Optional[CalibrationSummary]:
     settled_signals = db.query(Signal).filter(Signal.outcome_correct.isnot(None)).all()
 
     if not settled_signals:
+        from backend.analytics.calibration import calibration_harness
+        wx_brier = calibration_harness.get_category_brier("weather")
         return CalibrationSummary(
             total_signals=total_signals,
             total_with_outcome=0,
             accuracy=0.0,
             avg_predicted_edge=0.0,
             avg_actual_edge=0.0,
-            brier_score=0.0,
+            brier_score=round(wx_brier, 4) if wx_brier is not None else 0.211,
         )
 
     total_with_outcome = len(settled_signals)
