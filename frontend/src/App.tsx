@@ -251,7 +251,7 @@ function KalshiTierPanel({ tier }: { tier: KalshiTierInfo | null }) {
         </span>
       </div>
 
-      <div className="mb-1.5">
+      <div>
         <div className="flex items-center justify-between text-[9px] mb-0.5">
           <span className="text-neutral-400">Progress to {info.next_tier}</span>
           <span className="text-cyan-400 font-bold tabular-nums">{info.progress_display}</span>
@@ -266,22 +266,6 @@ function KalshiTierPanel({ tier }: { tier: KalshiTierInfo | null }) {
           {info.contracts_30d.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} /{' '}
           {info.next_tier_target.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} contracts (30d)
         </div>
-      </div>
-
-      <div className="border-t border-neutral-900 pt-1 mt-1 space-y-0.5">
-        <div className="text-[8px] text-neutral-500 uppercase tracking-wider mb-0.5">Tiers</div>
-        {info.tiers.map(t => (
-          <div key={t.name} className="flex items-center justify-between text-[9px] leading-tight">
-            <span className={t.is_current ? 'text-cyan-400 font-bold' : 'text-neutral-400'}>
-              {t.name}
-            </span>
-            <span className={`tabular-nums ${t.is_current ? 'text-cyan-400 font-bold' : 'text-neutral-500'}`}>
-              {t.is_current
-                ? 'Your current tier'
-                : `${t.contracts_required.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} contracts`}
-            </span>
-          </div>
-        ))}
       </div>
     </div>
   )
