@@ -877,7 +877,7 @@ class TestC137QuantitativeCore(unittest.TestCase):
             mock_db.query.return_value.filter.return_value.scalar.return_value = 0.0
             mock_db.query.return_value.filter.return_value.first.return_value = None
 
-            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_DEMO_ORDERS", True), \
+            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_ORDERS", True), \
                  patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig])), \
                  patch.object(sched_mod, "SessionLocal", return_value=mock_db), \
                  patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
@@ -887,7 +887,7 @@ class TestC137QuantitativeCore(unittest.TestCase):
                 self.assertEqual(mock_db.add.call_count, 0, "Failed order placement must not insert phantom Trade")
 
             # A. Unfilled IOC order (fill_count=0) -> must NOT call db.add(trade)
-            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_DEMO_ORDERS", True), \
+            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_ORDERS", True), \
                  patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig])), \
                  patch.object(sched_mod, "SessionLocal", return_value=mock_db), \
                  patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
@@ -897,7 +897,7 @@ class TestC137QuantitativeCore(unittest.TestCase):
                 self.assertEqual(mock_db.add.call_count, 0, "Unfilled IOC order must not insert phantom Trade")
 
             # B. Filled IOC order with fill_count=None and fill_count_fp="4.00" @ $0.40 -> size=$1.60, preserves event_slug
-            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_DEMO_ORDERS", True), \
+            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_ORDERS", True), \
                  patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig])), \
                  patch.object(sched_mod, "SessionLocal", return_value=mock_db), \
                  patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
@@ -944,7 +944,7 @@ class TestC137QuantitativeCore(unittest.TestCase):
             # First 3 Trade existence checks return an existing Trade; 4th returns None, subsequent checks return None
             mock_db_b2.query.return_value.filter.return_value.first.side_effect = [MagicMock(), MagicMock(), MagicMock(), None] + [None] * 10
 
-            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_DEMO_ORDERS", True), \
+            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_ORDERS", True), \
                  patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=held_sigs + [sig])), \
                  patch.object(sched_mod, "SessionLocal", return_value=mock_db_b2), \
                  patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
@@ -1077,7 +1077,7 @@ class TestC137QuantitativeCore(unittest.TestCase):
             mock_db.add.side_effect = lambda obj: added_trades.append(obj)
 
             order_mock = AsyncMock(return_value={"order": {"order_id": "ord-live-1", "fill_count": 10}})
-            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_DEMO_ORDERS", True), \
+            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_ORDERS", True), \
                  patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[live_sig, paper_sig])), \
                  patch.object(sched_mod, "SessionLocal", return_value=mock_db), \
                  patch.object(sched_mod, "PaperSessionLocal", return_value=mock_db), \
@@ -1192,7 +1192,7 @@ class TestC137QuantitativeCore(unittest.TestCase):
             mock_db.delete.side_effect = lambda obj: deleted_trades.append(obj)
 
             order_mock = AsyncMock(return_value={"order": {"order_id": "ord-live-promo", "fill_count": 10}})
-            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_DEMO_ORDERS", True), \
+            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_ORDERS", True), \
                  patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig])), \
                  patch.object(sched_mod, "SessionLocal", return_value=mock_db), \
                  patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \

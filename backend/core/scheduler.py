@@ -227,8 +227,8 @@ async def weather_scan_and_trade_job():
 
             # --- TRACK 1: TOP-TIER LIVE PRODUCTION KALSHI TRADING ---
             # Only execute into the live production database (tradingbot.db) when live order execution
-            # is enabled (KALSHI_EXECUTE_DEMO_ORDERS=true or SIMULATION_MODE=false).
-            if settings.KALSHI_EXECUTE_DEMO_ORDERS or not settings.SIMULATION_MODE:
+            # is enabled (KALSHI_EXECUTE_ORDERS=true or SIMULATION_MODE=false).
+            if settings.KALSHI_EXECUTE_ORDERS or not settings.SIMULATION_MODE:
                 for signal in actionable:
                     # Check if we already have an active LIVE trade for this market
                     existing_live = db.query(Trade).filter(

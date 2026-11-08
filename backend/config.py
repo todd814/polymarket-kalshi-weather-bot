@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     KALSHI_USE_DEMO: bool = True
     KALSHI_BASE_URL: Optional[str] = None
     KALSHI_SYNC_BALANCE: bool = True
-    KALSHI_EXECUTE_DEMO_ORDERS: bool = True
+    KALSHI_EXECUTE_ORDERS: bool = False
 
     # AI API Keys
     GROQ_API_KEY: Optional[str] = None
