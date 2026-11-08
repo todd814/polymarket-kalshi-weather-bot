@@ -34,18 +34,20 @@ CITY_CODE_MAP = {
 
 
 def parse_expiry_from_ticker(ticker: str) -> Optional[datetime]:
-    """Parse UTC expiry datetime from ticker like KXTEMPCHIHS-26NOV0414-T57.99"""
+    """Parse UTC expiry datetime from Kalshi Eastern-Time ticker like KXTEMPCHIHS-26NOV0414-T57.99"""
     m = re.search(r'-(\d{2})([A-Z]{3})(\d{2})(\d{2})-', ticker)
     if not m:
         return None
     try:
+        from zoneinfo import ZoneInfo
         year = 2000 + int(m.group(1))
         month = MONTH_MAP.get(m.group(2).upper())
         day = int(m.group(3))
         hour = int(m.group(4))
         if not month:
             return None
-        return datetime(year, month, day, hour, 0, 0, tzinfo=timezone.utc)
+        local_dt = datetime(year, month, day, hour, 0, 0, tzinfo=ZoneInfo("America/New_York"))
+        return local_dt.astimezone(timezone.utc)
     except Exception:
         return None
 
@@ -215,10 +217,10 @@ async def hourly_settlement_job():
             outcome_hit = None
             final_metric_val = None
 
-            # Only official Kalshi finalized results are accepted for settlement.
+            # Official Kalshi determined/finalized results are accepted for settlement.
             # No third-party or external observation guesswork.
             k_market = kalshi_markets.get(ticker)
-            if k_market and k_market.get("status") == "finalized" and k_market.get("result") in ["yes", "no"]:
+            if k_market and k_market.get("status") in ("determined", "finalized") and k_market.get("result") in ["yes", "no"]:
                 outcome_hit = (k_market["result"].lower() == "yes")
                 final_metric_val = k_market.get("expiration_value")
 
@@ -232,7 +234,8 @@ async def hourly_settlement_job():
             else:
                 trade_won = not outcome_hit
 
-            pnl = round((trade.size * (1.0 - trade.entry_price)) if trade_won else (-trade.size * trade.entry_price), 2)
+            entry_p = max(0.01, float(trade.entry_price or 0.5))
+            pnl = round((trade.size * ((1.0 - entry_p) / entry_p)) if trade_won else -trade.size, 2)
 
             trade.settled = True
             trade.settlement_time = datetime.utcnow()
