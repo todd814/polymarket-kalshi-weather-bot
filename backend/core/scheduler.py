@@ -211,7 +211,7 @@ async def weather_scan_and_trade_job():
 
             MAX_TRADES_PER_SCAN = 3
             MIN_TRADE_SIZE = max(1.0, round(state.bankroll * 0.01, 2))
-            MAX_WEATHER_ALLOCATION = max(20.0, round(state.bankroll * 0.50, 2))  # Max 50% exposure to weather markets
+            MAX_WEATHER_ALLOCATION = max(20.0, round(state.bankroll * 0.20, 2))  # Max 20% ($20 on $100) live exposure cap
 
             # Check weather allocation limit (live bankroll only)
             weather_pending = db.query(func.coalesce(func.sum(Trade.size), 0.0)).filter(
