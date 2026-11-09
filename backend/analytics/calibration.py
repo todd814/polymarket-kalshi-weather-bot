@@ -164,18 +164,20 @@ class SettlementCalibrationHarness:
 
     def evaluate_category_lockdowns(self) -> None:
         """
-        Frigo Kill Switch: If category Brier score > threshold with sufficient sample size,
-        lock it down instantly.
+        Frigo Kill Switch: If category Brier score > threshold AND cumulative P&L < 0
+        with sufficient sample size, lock it down instantly.
+        Never lock down a net-profitable category.
         """
         for cat, recs in self.category_records.items():
             if len(recs) >= self.min_trades_for_audit:
                 mean_brier = sum(r.brier_contribution for r in recs) / len(recs)
-                if mean_brier > self.brier_threshold:
+                total_pnl = sum(r.pnl for r in recs)
+                if mean_brier > self.brier_threshold and total_pnl < 0:
                     self.locked_categories[cat] = (
                         f"NEGATIVE EDGE LOCKDOWN: Brier score {mean_brier:.4f} > limit {self.brier_threshold:.4f} "
-                        f"across {len(recs)} trades. Model is hallucinating."
+                        f"and P&L ${total_pnl:.2f} < $0 across {len(recs)} trades. Model is hallucinating."
                     )
-                elif cat in self.locked_categories and mean_brier <= self.brier_threshold:
+                elif cat in self.locked_categories and (mean_brier <= self.brier_threshold or total_pnl >= 0):
                     del self.locked_categories[cat]
 
     def is_category_permitted(self, category: str) -> Tuple[bool, Optional[str]]:
@@ -185,5 +187,5 @@ class SettlementCalibrationHarness:
         return True, None
 
 
-# Global singleton instance
-calibration_harness = SettlementCalibrationHarness()
+# Global singleton instance (requires 20+ live settled trades before auditing)
+calibration_harness = SettlementCalibrationHarness(min_trades_for_audit=20)
