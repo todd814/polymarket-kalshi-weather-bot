@@ -294,7 +294,7 @@ async def weather_scan_and_trade_job():
 
             MAX_TRADES_PER_SCAN = 3
             MIN_TRADE_SIZE = max(1.0, round(state.bankroll * 0.01, 2))
-            MAX_WEATHER_ALLOCATION = max(20.0, round(state.bankroll * 0.20, 2))  # Max 20% ($20 on $100) live exposure cap
+            MAX_WEATHER_ALLOCATION = max(25.0, round(state.bankroll * 0.25, 2))  # Max 25% ($25 on $100) live exposure cap
 
             # Check weather allocation limit (live bankroll only), excluding Outcome-Pending
             # positions expected to win so yesterday's unfinalized wins don't starve today/tomorrow!
