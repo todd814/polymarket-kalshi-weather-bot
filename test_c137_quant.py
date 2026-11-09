@@ -1312,6 +1312,88 @@ class TestC137QuantitativeCore(unittest.TestCase):
         finally:
             app.dependency_overrides.pop(get_db, None)
 
+    def test_active_weather_exposure_excludes_outcome_pending_and_expected_wins(self):
+        """
+        Verify _compute_active_weather_exposure excludes:
+          1. Prior-day 'Outcome pending' contracts (target_date < today_est) expected to win.
+          2. Same-day active contracts locked in via C-137 Ratchet (side_prob >= 0.90) or market mark >= 0.85.
+          3. Counts normal in-flight today/tomorrow positions toward the daily limiter.
+        """
+        from datetime import date
+        from unittest.mock import MagicMock
+        from backend.core.scheduler import _compute_active_weather_exposure, _parse_ticker_target_date
+        from backend.models.database import Trade
+
+        self.assertEqual(_parse_ticker_target_date("KXHIGHDEN-26NOV08-B69.5"), date(2026, 11, 8))
+        self.assertEqual(_parse_ticker_target_date("KXHIGHMIA-26NOV09-B85.5"), date(2026, 11, 9))
+
+        today = date(2026, 11, 9)
+        t_yesterday_den1 = Trade(
+            market_ticker="KXHIGHDEN-26NOV08-B67.5",
+            market_type="weather",
+            direction="no",
+            size=4.86,
+            model_probability=0.15,  # NO win prob = 0.85
+            settled=False,
+            is_paper=False,
+        )
+        t_yesterday_den2 = Trade(
+            market_ticker="KXHIGHDEN-26NOV08-B69.5",
+            market_type="weather",
+            direction="no",
+            size=4.68,
+            model_probability=0.15,  # NO win prob = 0.85
+            settled=False,
+            is_paper=False,
+        )
+        t_today_mia = Trade(
+            market_ticker="KXHIGHMIA-26NOV09-B85.5",
+            market_type="weather",
+            direction="no",
+            size=4.03,
+            model_probability=0.15,
+            settled=False,
+            is_paper=False,
+        )
+        t_today_lax_ratchet = Trade(
+            market_ticker="KXHIGHLAX-26NOV09-T87",
+            market_type="weather",
+            direction="yes",
+            size=1.78,
+            model_probability=0.25,
+            settled=False,
+            is_paper=False,
+        )
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            t_yesterday_den1,
+            t_yesterday_den2,
+            t_today_mia,
+            t_today_lax_ratchet,
+        ]
+
+        sig_mia = MagicMock()
+        sig_mia.market.market_id = "KXHIGHMIA-26NOV09-B85.5"
+        sig_mia.model_probability = 0.15  # NO prob = 0.85 (< 0.90)
+        sig_mia.market.yes_price = 0.69
+        sig_mia.market.no_price = 0.31    # mark = 0.31 (< 0.85) -> still at risk!
+
+        sig_lax = MagicMock()
+        sig_lax.market.market_id = "KXHIGHLAX-26NOV09-T87"
+        sig_lax.model_probability = 0.999  # Ratchet locked YES!
+        sig_lax.market.yes_price = 0.92
+        sig_lax.market.no_price = 0.08
+
+        active_exp, excluded_exp, excluded_cnt = _compute_active_weather_exposure(
+            mock_db, [sig_mia, sig_lax], today_est=today
+        )
+        # Only t_today_mia ($4.03) should count against the daily limiter;
+        # the 2 yesterday Outcome-Pending trades ($9.54) and 1 Ratchet-locked trade ($1.78) are excluded ($11.32).
+        self.assertAlmostEqual(active_exp, 4.03)
+        self.assertAlmostEqual(excluded_exp, 11.32)
+        self.assertEqual(excluded_cnt, 3)
+
 
 if __name__ == "__main__":
     unittest.main()

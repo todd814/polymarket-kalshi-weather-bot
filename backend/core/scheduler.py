@@ -176,6 +176,89 @@ async def scan_and_trade_job():
         logger.exception("Error in scan_and_trade_job")
 
 
+def _parse_ticker_target_date(ticker: str):
+    """
+    C-137 Ticker Chronology Parser:
+    Extracts the contract target date from a Kalshi ticker (e.g. KXHIGHDEN-26NOV08-B69.5 -> 2026-11-08)
+    so yesterday's closed 'Outcome pending' corpses don't hostage today's capital.
+    """
+    import re
+    m = re.search(r"-(\d{2}[A-Z]{3}\d{2})-", (ticker or "").upper())
+    if not m:
+        return None
+    try:
+        return datetime.strptime(m.group(1), "%y%b%d").date()
+    except ValueError:
+        return None
+
+
+def _compute_active_weather_exposure(db, signals: list, today_est=None) -> tuple[float, float, int]:
+    """
+    C-137 Dynamic Daily Limiter Filter:
+    Computes active at-risk weather exposure, EXCLUDING unsettled positions that:
+      1. Are in 'Outcome pending' status (prior-day contracts where target_date < today_est,
+         or closed contracts no longer in active open signals while their series is active)
+         AND are expected to win (held-side win probability >= 0.50).
+      2. Are active open positions that have already locked in an expected win intraday
+         via the C-137 ASOS High-Water Mark Ratchet (held-side model prob >= 0.90) or
+         a live market mark on our held side >= 0.85 (excluding 1.00 empty-book placeholders).
+    Returns (active_exposure_usd, excluded_exposure_usd, excluded_count).
+    """
+    from zoneinfo import ZoneInfo
+    if today_est is None:
+        today_est = datetime.now(ZoneInfo("America/New_York")).date()
+
+    open_trades = db.query(Trade).filter(
+        Trade.settled == False,
+        Trade.market_type == "weather",
+        Trade.is_paper == False,
+    ).all()
+
+    sig_by_ticker = {s.market.market_id: s for s in (signals or []) if getattr(s, "market", None)}
+    active_series_prefixes = {
+        t_id.split("-")[0] for t_id in sig_by_ticker.keys() if "-" in t_id
+    }
+
+    active_exposure = 0.0
+    excluded_exposure = 0.0
+    excluded_count = 0
+
+    for t in open_trades:
+        t_size = float(t.size or 0.0)
+        ticker = t.market_ticker or ""
+        series_prefix = ticker.split("-")[0] if "-" in ticker else ""
+        target_dt = _parse_ticker_target_date(ticker)
+
+        held_dir = (t.direction or "yes").lower()
+        raw_model_prob = float(t.model_probability if t.model_probability is not None else 0.5)
+        # Trade.model_probability stores model_yes_prob from WeatherTradingSignal
+        stored_side_win_prob = raw_model_prob if held_dir == "yes" else (1.0 - raw_model_prob)
+
+        # 1. Kalshi "Outcome pending" status (prior-day contract or closed trading window)
+        is_outcome_pending = (
+            (target_dt is not None and target_dt < today_est)
+            or (series_prefix in active_series_prefixes and ticker not in sig_by_ticker)
+        )
+        if is_outcome_pending and stored_side_win_prob >= 0.50:
+            excluded_exposure += t_size
+            excluded_count += 1
+            continue
+
+        # 2. Active open position that locked in an expected win (Ratchet >= 90% or market mark >= 85c)
+        sig = sig_by_ticker.get(ticker)
+        if sig is not None:
+            live_side_prob = sig.model_probability if held_dir == "yes" else (1.0 - sig.model_probability)
+            live_side_mark = sig.market.yes_price if held_dir == "yes" else sig.market.no_price
+            if live_side_prob >= 0.90 or (live_side_mark is not None and 0.85 <= live_side_mark < 1.0):
+                excluded_exposure += t_size
+                excluded_count += 1
+                continue
+
+        active_exposure += t_size
+
+    return round(active_exposure, 2), round(excluded_exposure, 2), excluded_count
+
+
 async def weather_scan_and_trade_job():
     """
     Background job: Scan weather temperature markets, generate signals, execute trades.
@@ -213,12 +296,15 @@ async def weather_scan_and_trade_job():
             MIN_TRADE_SIZE = max(1.0, round(state.bankroll * 0.01, 2))
             MAX_WEATHER_ALLOCATION = max(20.0, round(state.bankroll * 0.20, 2))  # Max 20% ($20 on $100) live exposure cap
 
-            # Check weather allocation limit (live bankroll only)
-            weather_pending = db.query(func.coalesce(func.sum(Trade.size), 0.0)).filter(
-                Trade.settled == False,
-                Trade.market_type == "weather",
-                Trade.is_paper == False,
-            ).scalar()
+            # Check weather allocation limit (live bankroll only), excluding Outcome-Pending
+            # positions expected to win so yesterday's unfinalized wins don't starve today/tomorrow!
+            weather_pending, excluded_pending, excluded_count = _compute_active_weather_exposure(db, signals)
+            if excluded_count > 0:
+                log_event(
+                    "info",
+                    f"C-137 Limiter Bypass: Excluded {excluded_count} outcome-pending/expected-win position(s) "
+                    f"(${excluded_pending:.2f}) from daily limiter -> Active exposure: ${weather_pending:.2f}/${MAX_WEATHER_ALLOCATION:.2f}",
+                )
 
             trades_executed = 0
             paper_trades_executed = 0
