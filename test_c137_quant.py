@@ -1394,6 +1394,47 @@ class TestC137QuantitativeCore(unittest.TestCase):
         self.assertAlmostEqual(excluded_exp, 11.32)
         self.assertEqual(excluded_cnt, 3)
 
+        # Also verify _compute_staged_weather_exposure separates Today (T+0) vs Future (T+1)
+        # and rolls T+1 into Today at midnight EST
+        from backend.core.scheduler import _compute_staged_weather_exposure
+        t_tomorrow_mia = Trade(
+            market_ticker="KXHIGHMIA-26NOV10-B84.5",
+            market_type="weather",
+            direction="no",
+            size=4.68,
+            model_probability=0.15,
+            settled=False,
+            is_paper=False,
+        )
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            t_yesterday_den1,
+            t_today_mia,
+            t_tomorrow_mia,
+        ]
+        sig_mia_tmrw = MagicMock()
+        sig_mia_tmrw.market.market_id = "KXHIGHMIA-26NOV10-B84.5"
+        sig_mia_tmrw.model_probability = 0.15
+        sig_mia_tmrw.market.yes_price = 0.64
+        sig_mia_tmrw.market.no_price = 0.36
+
+        today_exp, future_exp, excl_exp, excl_cnt = _compute_staged_weather_exposure(
+            mock_db, [sig_mia, sig_mia_tmrw], today_est=date(2026, 11, 9)
+        )
+        self.assertAlmostEqual(today_exp, 4.03)
+        self.assertAlmostEqual(future_exp, 4.68)
+        self.assertAlmostEqual(excl_exp, 4.86)
+        self.assertEqual(excl_cnt, 1)
+
+        # When date rolls to 2026-11-10, t_today_mia (26NOV09) becomes Outcome-Pending (excluded),
+        # and t_tomorrow_mia (26NOV10) matures into the Today (T+0) bucket!
+        today_exp_next, future_exp_next, excl_exp_next, excl_cnt_next = _compute_staged_weather_exposure(
+            mock_db, [sig_mia_tmrw], today_est=date(2026, 11, 10)
+        )
+        self.assertAlmostEqual(today_exp_next, 4.68)
+        self.assertAlmostEqual(future_exp_next, 0.0)
+        self.assertAlmostEqual(excl_exp_next, 4.86 + 4.03)
+        self.assertEqual(excl_cnt_next, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

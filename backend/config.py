@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     WEATHER_SCAN_INTERVAL_SECONDS: int = 300  # 5 min
     WEATHER_SETTLEMENT_INTERVAL_SECONDS: int = 1800  # 30 min
     WEATHER_MIN_EDGE_THRESHOLD: float = 0.08  # 8% — weather has more signal than 5-min BTC
+    WEATHER_FUTURE_MIN_EDGE_THRESHOLD: float = 0.12  # 12% — stricter hurdle for T+1 (Tomorrow) pre-allocation
     WEATHER_PAPER_MIN_EDGE_THRESHOLD: float = 0.03  # 3% — shadow paper trading hurdle for volume data collection
     WEATHER_MIN_ENTRY_PRICE: float = 0.06  # 6c minimum floor for Threshold (-T) contracts
     WEATHER_BRACKET_YES_MIN_PRICE: float = 0.12  # 12c minimum floor for Bracket (-B) YES contracts

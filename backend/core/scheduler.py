@@ -192,17 +192,22 @@ def _parse_ticker_target_date(ticker: str):
         return None
 
 
-def _compute_active_weather_exposure(db, signals: list, today_est=None) -> tuple[float, float, int]:
+def _compute_staged_weather_exposure(db, signals: list, today_est=None) -> tuple[float, float, float, int]:
     """
-    C-137 Dynamic Daily Limiter Filter:
-    Computes active at-risk weather exposure, EXCLUDING unsettled positions that:
+    C-137 Staged Rolling Target-Date Vintage Exposure Engine:
+    Splits active at-risk weather exposure into two horizon buckets:
+      - Bucket A (today_exposure): Same-day contracts (target_date <= today_est), capped at 25% of bankroll.
+      - Bucket B (future_exposure): Tomorrow/future contracts (target_date > today_est), capped at 12.5% of bankroll
+        so when Tomorrow rolls into Today at midnight EST, it automatically inherits the full 25% Today cap
+        with at least 12.5% dry powder reserved for high-precision same-day synoptic & ASOS ratchet setups.
+    Excludes unsettled positions that:
       1. Are in 'Outcome pending' status (prior-day contracts where target_date < today_est,
          or closed contracts no longer in active open signals while their series is active)
          AND are expected to win (held-side win probability >= 0.50).
       2. Are active open positions that have already locked in an expected win intraday
          via the C-137 ASOS High-Water Mark Ratchet (held-side model prob >= 0.90) or
          a live market mark on our held side >= 0.85 (excluding 1.00 empty-book placeholders).
-    Returns (active_exposure_usd, excluded_exposure_usd, excluded_count).
+    Returns (today_exposure_usd, future_exposure_usd, excluded_exposure_usd, excluded_count).
     """
     from zoneinfo import ZoneInfo
     if today_est is None:
@@ -219,7 +224,8 @@ def _compute_active_weather_exposure(db, signals: list, today_est=None) -> tuple
         t_id.split("-")[0] for t_id in sig_by_ticker.keys() if "-" in t_id
     }
 
-    active_exposure = 0.0
+    today_exposure = 0.0
+    future_exposure = 0.0
     excluded_exposure = 0.0
     excluded_count = 0
 
@@ -254,9 +260,22 @@ def _compute_active_weather_exposure(db, signals: list, today_est=None) -> tuple
                 excluded_count += 1
                 continue
 
-        active_exposure += t_size
+        if target_dt is not None and target_dt > today_est:
+            future_exposure += t_size
+        else:
+            today_exposure += t_size
 
-    return round(active_exposure, 2), round(excluded_exposure, 2), excluded_count
+    return round(today_exposure, 2), round(future_exposure, 2), round(excluded_exposure, 2), excluded_count
+
+
+def _compute_active_weather_exposure(db, signals: list, today_est=None) -> tuple[float, float, int]:
+    """
+    Backwards-compatible wrapper returning (total_active_exposure_usd, excluded_exposure_usd, excluded_count).
+    """
+    today_exp, future_exp, excluded_exp, excluded_cnt = _compute_staged_weather_exposure(
+        db, signals, today_est=today_est
+    )
+    return round(today_exp + future_exp, 2), excluded_exp, excluded_cnt
 
 
 async def weather_scan_and_trade_job():
@@ -267,6 +286,8 @@ async def weather_scan_and_trade_job():
     log_event("info", "Scanning weather temperature markets...")
 
     try:
+        from datetime import date
+        from zoneinfo import ZoneInfo
         from backend.core.weather_signals import scan_for_weather_signals
 
         signals = await scan_for_weather_signals()
@@ -294,22 +315,33 @@ async def weather_scan_and_trade_job():
 
             MAX_TRADES_PER_SCAN = 3
             MIN_TRADE_SIZE = max(1.0, round(state.bankroll * 0.01, 2))
-            MAX_WEATHER_ALLOCATION = max(25.0, round(state.bankroll * 0.25, 2))  # Max 25% ($25 on $100) live exposure cap
 
-            # Check weather allocation limit (live bankroll only), excluding Outcome-Pending
-            # positions expected to win so yesterday's unfinalized wins don't starve today/tomorrow!
-            weather_pending, excluded_pending, excluded_count = _compute_active_weather_exposure(db, signals)
+            # C-137 Staged Rolling Target-Date Vintage Caps:
+            # - Today (T+0): 25% of bankroll ($25.00 floor) for high-precision same-day + ASOS ratchet setups
+            # - Tomorrow/Future (T+1): 12.5% of bankroll ($12.50 floor) pre-allocation with 12% min edge hurdle;
+            #   automatically matures into the 25% Today bucket at midnight EST with >=12.5% dry powder left!
+            MAX_TODAY_ALLOCATION = max(25.0, round(state.bankroll * 0.25, 2))
+            MAX_FUTURE_ALLOCATION = max(12.5, round(state.bankroll * 0.125, 2))
+            FUTURE_MIN_EDGE_HURDLE = getattr(settings, "WEATHER_FUTURE_MIN_EDGE_THRESHOLD", 0.12)
+
+            today_est = datetime.now(ZoneInfo("America/New_York")).date()
+            today_pending, future_pending, excluded_pending, excluded_count = _compute_staged_weather_exposure(
+                db, signals, today_est=today_est
+            )
             if excluded_count > 0:
                 log_event(
                     "info",
                     f"C-137 Limiter Bypass: Excluded {excluded_count} outcome-pending/expected-win position(s) "
-                    f"(${excluded_pending:.2f}) from daily limiter -> Active exposure: ${weather_pending:.2f}/${MAX_WEATHER_ALLOCATION:.2f}",
+                    f"(${excluded_pending:.2f}) -> Today: ${today_pending:.2f}/${MAX_TODAY_ALLOCATION:.2f} | "
+                    f"Future: ${future_pending:.2f}/${MAX_FUTURE_ALLOCATION:.2f}",
                 )
 
             trades_executed = 0
             paper_trades_executed = 0
             attempted_live_tickers = set()
             live_held_tickers = set()
+            logged_today_cap = False
+            logged_future_cap = False
 
             # --- TRACK 1: TOP-TIER LIVE PRODUCTION KALSHI TRADING ---
             # Only execute into the live production database (tradingbot.db) when live order execution
@@ -333,9 +365,41 @@ async def weather_scan_and_trade_job():
                     if trades_executed >= MAX_TRADES_PER_SCAN:
                         break
 
-                    if weather_pending >= MAX_WEATHER_ALLOCATION:
-                        log_event("info", f"Weather allocation limit reached: ${weather_pending:.0f}/${MAX_WEATHER_ALLOCATION:.0f}")
+                    if today_pending >= MAX_TODAY_ALLOCATION and future_pending >= MAX_FUTURE_ALLOCATION:
+                        log_event(
+                            "info",
+                            f"Both weather buckets full: Today ${today_pending:.2f}/${MAX_TODAY_ALLOCATION:.2f}, "
+                            f"Future ${future_pending:.2f}/${MAX_FUTURE_ALLOCATION:.2f}",
+                        )
                         break
+
+                    sig_target_dt = _parse_ticker_target_date(signal.market.market_id)
+                    if sig_target_dt is None:
+                        mkt_dt = getattr(signal.market, "target_date", None)
+                        if isinstance(mkt_dt, date):
+                            sig_target_dt = mkt_dt
+                    is_future_contract = (sig_target_dt is not None and sig_target_dt > today_est)
+
+                    if is_future_contract:
+                        if signal.edge < FUTURE_MIN_EDGE_HURDLE:
+                            continue
+                        if future_pending >= MAX_FUTURE_ALLOCATION:
+                            if not logged_future_cap:
+                                log_event(
+                                    "info",
+                                    f"Future (T+1) weather bucket limit reached: ${future_pending:.2f}/${MAX_FUTURE_ALLOCATION:.2f}",
+                                )
+                                logged_future_cap = True
+                            continue
+                    else:
+                        if today_pending >= MAX_TODAY_ALLOCATION:
+                            if not logged_today_cap:
+                                log_event(
+                                    "info",
+                                    f"Today (T+0) weather bucket limit reached: ${today_pending:.2f}/${MAX_TODAY_ALLOCATION:.2f}",
+                                )
+                                logged_today_cap = True
+                            continue
 
                     if state.bankroll < MIN_TRADE_SIZE:
                         log_event("warning", f"Bankroll too low: ${state.bankroll:.2f}")
@@ -414,7 +478,10 @@ async def weather_scan_and_trade_job():
 
                     state.total_trades += 1
                     trades_executed += 1
-                    weather_pending += trade_size
+                    if is_future_contract:
+                        future_pending += trade_size
+                    else:
+                        today_pending += trade_size
 
                     log_event("trade",
                         f"WX [LIVE] {signal.market.city_name}: {signal.direction.upper()} "
