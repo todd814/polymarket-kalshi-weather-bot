@@ -332,7 +332,7 @@ async def _fetch_kalshi_resolution(ticker: str) -> Tuple[bool, Optional[float]]:
         return False, None
 
 
-async def settle_pending_trades(db: Session) -> List[Trade]:
+async def settle_pending_trades(db: Session, record_calibration: bool = True) -> List[Trade]:
     """
     Process all pending trades for settlement.
     Uses REAL market outcomes from Polymarket API.
@@ -381,7 +381,7 @@ async def settle_pending_trades(db: Session) -> List[Trade]:
                 settled_trades.append(trade)
 
                 # Record to C-137 calibration harness (strictly for LIVE production trades)
-                if getattr(trade, "is_paper", False) is not True:
+                if record_calibration and getattr(trade, "is_paper", False) is not True:
                     try:
                         cat = getattr(trade, 'market_type', 'btc') or 'btc'
                         raw_model_prob = getattr(trade, 'model_probability', None)

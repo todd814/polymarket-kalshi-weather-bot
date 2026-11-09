@@ -470,7 +470,7 @@ async def settlement_job():
                 Trade.market_type != "weather_hourly",
             ).count()
             if paper_pending > 0:
-                paper_settled = await settle_pending_trades(paper_db)
+                paper_settled = await settle_pending_trades(paper_db, record_calibration=False)
                 if paper_settled:
                     paper_db.commit()
                     logger.info(f"Settled {len(paper_settled)} daily paper training trades in paper_training.db")
