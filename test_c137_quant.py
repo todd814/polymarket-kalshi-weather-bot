@@ -1435,6 +1435,83 @@ class TestC137QuantitativeCore(unittest.TestCase):
         self.assertAlmostEqual(excl_exp_next, 4.86 + 4.03)
         self.assertEqual(excl_cnt_next, 2)
 
+    def test_dust_fill_topup_merges_into_existing_live_trade(self):
+        """
+        Verify that a sub-$1.00 fractional dust fill (e.g. $0.05 on 0.1x contracts)
+        does NOT block subsequent top-up execution on the same ticker, and merges
+        the top-up size + volume-weighted entry price into the existing Trade row.
+        """
+        import asyncio
+        from datetime import date
+        from unittest.mock import patch, AsyncMock, MagicMock
+        import backend.core.scheduler as sched_mod
+        from backend.data.weather_markets import WeatherMarket
+        from backend.core.weather_signals import WeatherTradingSignal
+        from backend.models.database import Trade
+
+        today = date.today()
+        mkt = WeatherMarket(
+            slug="KXHIGHAUS-TODAY-B64.5",
+            market_id="KXHIGHAUS-TODAY-B64.5",
+            platform="kalshi",
+            title="Austin high 64-65F",
+            city_key="austin",
+            city_name="Austin",
+            target_date=today,
+            threshold_f=64.0,
+            cap_f=65.0,
+            metric="high",
+            direction="between",
+            yes_price=0.50,
+            no_price=0.50,
+        )
+        sig = WeatherTradingSignal(
+            market=mkt,
+            model_probability=0.15,
+            market_probability=0.50,
+            edge=0.35,
+            direction="no",
+            confidence=0.85,
+            kelly_fraction=0.04,
+            suggested_size=4.03,
+        )
+        dust_trade = Trade(
+            id=21,
+            market_ticker="KXHIGHAUS-TODAY-B64.5",
+            platform="kalshi",
+            event_slug="KXHIGHAUS-TODAY-B64.5",
+            market_type="weather",
+            direction="no",
+            entry_price=0.50,
+            size=0.03,  # $0.03 dust fill (< $1.00 MIN_TRADE_SIZE)
+            settled=False,
+            is_paper=False,
+        )
+
+        async def run_dust_topup():
+            mock_db = MagicMock()
+            mock_state = MagicMock(bankroll=100.0, is_running=True, total_trades=1)
+            mock_db.query.return_value.first.return_value = mock_state
+            mock_db.query.return_value.filter.return_value.all.return_value = [dust_trade]
+            mock_db.query.return_value.filter.return_value.first.return_value = dust_trade
+
+            order_mock = AsyncMock(return_value={"order": {"order_id": "ord-topup", "fill_count": 8}})
+            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_ORDERS", True), \
+                 patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig])), \
+                 patch.object(sched_mod, "SessionLocal", return_value=mock_db), \
+                 patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
+                 patch("backend.data.kalshi_client.kalshi_credentials_present", return_value=True), \
+                 patch("backend.data.kalshi_client.KalshiClient.create_order", order_mock):
+                await sched_mod.weather_scan_and_trade_job()
+
+            # Must have topped up and merged into dust_trade without inserting a duplicate Trade row
+            self.assertEqual(order_mock.call_count, 1)
+            self.assertEqual(mock_db.add.call_count, 0)
+            self.assertAlmostEqual(dust_trade.size, 4.03, places=2)
+            self.assertEqual(mock_state.total_trades, 1)
+
+        asyncio.run(run_dust_topup())
+
 
 if __name__ == "__main__":
     unittest.main()

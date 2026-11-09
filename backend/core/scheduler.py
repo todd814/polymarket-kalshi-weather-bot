@@ -355,9 +355,20 @@ async def weather_scan_and_trade_job():
                         Trade.is_paper == False,
                     ).first()
 
+                    is_dust_topup = False
                     if existing_live:
-                        live_held_tickers.add(signal.market.market_id)
-                        continue
+                        existing_size = getattr(existing_live, "size", None)
+                        if (
+                            isinstance(existing_size, (int, float))
+                            and 0 < float(existing_size) < MIN_TRADE_SIZE
+                            and getattr(existing_live, "direction", None) == signal.direction
+                        ):
+                            # Sub-$1.00 dust stub fill (e.g. $0.03 or $0.05 fractional IOC sweep):
+                            # allow topping up the remaining size and merging into the existing row!
+                            is_dust_topup = True
+                        else:
+                            live_held_tickers.add(signal.market.market_id)
+                            continue
 
                     if signal.suggested_size <= 0:
                         continue
@@ -406,13 +417,17 @@ async def weather_scan_and_trade_job():
                         break
 
                     attempted_live_tickers.add(signal.market.market_id)
-                    trade_size = min(signal.suggested_size, settings.WEATHER_MAX_TRADE_SIZE)
-                    trade_size = max(trade_size, MIN_TRADE_SIZE)
+                    target_size = max(min(signal.suggested_size, settings.WEATHER_MAX_TRADE_SIZE), MIN_TRADE_SIZE)
+                    if is_dust_topup:
+                        trade_size = max(MIN_TRADE_SIZE, round(target_size - float(existing_live.size or 0.0), 2))
+                    else:
+                        trade_size = target_size
 
                     entry_price = signal.market.yes_price if signal.direction == "yes" else signal.market.no_price
 
                     # Live order execution on Kalshi Prod
                     kalshi_order_id = None
+                    filled_contracts = 0.0
                     if getattr(signal.market, "platform", "") == "kalshi":
                         from backend.data.kalshi_client import KalshiClient, kalshi_credentials_present
                         if kalshi_credentials_present():
@@ -448,35 +463,52 @@ async def weather_scan_and_trade_job():
                                 log_event("error", f"Kalshi order placement error: {e}")
                                 continue
 
-                    trade = Trade(
-                        market_ticker=signal.market.market_id,
-                        platform=getattr(signal.market, "platform", "kalshi"),
-                        event_slug=signal.market.slug,
-                        market_type="weather",
-                        direction=signal.direction,
-                        entry_price=entry_price,
-                        size=trade_size,
-                        model_probability=signal.model_probability,
-                        market_price_at_entry=signal.market_probability,
-                        edge_at_entry=signal.edge,
-                        is_paper=False,
-                    )
+                    if is_dust_topup and existing_live is not None:
+                        old_size = float(existing_live.size or 0.0)
+                        old_price = float(existing_live.entry_price or entry_price)
+                        old_contracts = (old_size / old_price) if old_price > 0 else 0.0
+                        add_contracts = filled_contracts if filled_contracts > 0 else (trade_size / entry_price if entry_price > 0 else 0.0)
+                        tot_contracts = old_contracts + add_contracts
+                        merged_size = round(old_size + trade_size, 2)
+                        merged_price = round(merged_size / tot_contracts, 4) if tot_contracts > 0 else entry_price
+                        existing_live.size = merged_size
+                        existing_live.entry_price = merged_price
+                        existing_live.model_probability = signal.model_probability
+                        existing_live.market_price_at_entry = signal.market_probability
+                        existing_live.edge_at_entry = signal.edge
+                        trade = existing_live
+                        db.flush()
+                    else:
+                        trade = Trade(
+                            market_ticker=signal.market.market_id,
+                            platform=getattr(signal.market, "platform", "kalshi"),
+                            event_slug=signal.market.slug,
+                            market_type="weather",
+                            direction=signal.direction,
+                            entry_price=entry_price,
+                            size=trade_size,
+                            model_probability=signal.model_probability,
+                            market_price_at_entry=signal.market_probability,
+                            edge_at_entry=signal.edge,
+                            is_paper=False,
+                        )
 
-                    db.add(trade)
-                    db.flush()
+                        db.add(trade)
+                        db.flush()
 
-                    # Link to signal record
-                    matching_signal = db.query(Signal).filter(
-                        Signal.market_ticker == signal.market.market_id,
-                        Signal.market_type == "weather",
-                        Signal.executed == False,
-                    ).order_by(Signal.timestamp.desc()).first()
-                    if matching_signal:
-                        matching_signal.executed = True
-                        matching_signal.is_paper = False
-                        trade.signal_id = matching_signal.id
+                        # Link to signal record
+                        matching_signal = db.query(Signal).filter(
+                            Signal.market_ticker == signal.market.market_id,
+                            Signal.market_type == "weather",
+                            Signal.executed == False,
+                        ).order_by(Signal.timestamp.desc()).first()
+                        if matching_signal:
+                            matching_signal.executed = True
+                            matching_signal.is_paper = False
+                            trade.signal_id = matching_signal.id
 
-                    state.total_trades += 1
+                        state.total_trades += 1
+
                     trades_executed += 1
                     if is_future_contract:
                         future_pending += trade_size
