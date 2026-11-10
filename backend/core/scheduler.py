@@ -192,6 +192,26 @@ def _parse_ticker_target_date(ticker: str):
         return None
 
 
+def _extract_ticker_city_and_date(ticker: str):
+    """
+    Extract canonical city_key and target_date from ticker to prevent multi-strike concentration clustering.
+    """
+    prefix = (ticker or "").split("-")[0].upper()
+    city_map = {
+        "KXHIGHNY": "nyc",
+        "KXHIGHCHI": "chicago",
+        "KXHIGHMIA": "miami",
+        "KXHIGHLAX": "los_angeles",
+        "KXHIGHDEN": "denver",
+        "KXHIGHAUS": "austin",
+        "KXHIGHTHOU": "houston",
+        "KXHIGHDCA": "washington_dc",
+        "KXHIGHBOS": "boston",
+        "KXHIGHPHIL": "philadelphia",
+    }
+    return city_map.get(prefix), _parse_ticker_target_date(ticker)
+
+
 def _compute_staged_weather_exposure(db, signals: list, today_est=None) -> tuple[float, float, float, int]:
     """
     C-137 Staged Rolling Target-Date Vintage Exposure Engine:
@@ -343,6 +363,19 @@ async def weather_scan_and_trade_job():
             logged_today_cap = False
             logged_future_cap = False
 
+            # City concentration map: track open positions per (city, target_date)
+            max_pos_per_city_date = getattr(settings, "WEATHER_MAX_POSITIONS_PER_CITY_DATE", 1)
+            city_date_counts = {}
+            open_live_trades = db.query(Trade).filter(
+                Trade.settled == False,
+                Trade.market_type == "weather",
+                Trade.is_paper == False,
+            ).all()
+            for ot in open_live_trades:
+                c, d = _extract_ticker_city_and_date(ot.market_ticker or "")
+                if c and d:
+                    city_date_counts[(c, d)] = city_date_counts.get((c, d), 0) + 1
+
             # --- TRACK 1: TOP-TIER LIVE PRODUCTION KALSHI TRADING ---
             # Only execute into the live production database (tradingbot.db) when live order execution
             # is enabled (KALSHI_EXECUTE_ORDERS=true or SIMULATION_MODE=false).
@@ -390,6 +423,17 @@ async def weather_scan_and_trade_job():
                         if isinstance(mkt_dt, date):
                             sig_target_dt = mkt_dt
                     is_future_contract = (sig_target_dt is not None and sig_target_dt > today_est)
+
+                    sig_city = getattr(signal.market, "city_key", None)
+                    if not sig_city:
+                        sig_city, _ = _extract_ticker_city_and_date(signal.market.market_id)
+
+                    # Enforce city-date concentration limits (e.g. max 1 position per city per date)
+                    if not is_dust_topup and sig_city and sig_target_dt:
+                        current_city_cnt = city_date_counts.get((sig_city, sig_target_dt), 0)
+                        if current_city_cnt >= max_pos_per_city_date:
+                            log_event("info", f"City concentration limit ({max_pos_per_city_date}) reached for {sig_city} on {sig_target_dt}; skipping correlated strike")
+                            continue
 
                     if is_future_contract:
                         if signal.edge < FUTURE_MIN_EDGE_HURDLE:
@@ -510,6 +554,8 @@ async def weather_scan_and_trade_job():
                         state.total_trades += 1
 
                     trades_executed += 1
+                    if sig_city and sig_target_dt:
+                        city_date_counts[(sig_city, sig_target_dt)] = city_date_counts.get((sig_city, sig_target_dt), 0) + 1
                     if is_future_contract:
                         future_pending += trade_size
                     else:

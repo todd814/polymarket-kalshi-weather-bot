@@ -397,7 +397,7 @@ class TestC137QuantitativeCore(unittest.TestCase):
             no_price=0.60,
         )
 
-        # Market 2: 86-87F bracket with 8c spread (yes_ask=0.67, no_ask=0.41 -> spread=0.08 <= 0.10)
+        # Market 2: 86-87F bracket with NO edge (yes_ask=0.45, no_ask=0.41 -> spread=0.0 <= 0.10, div=30% <= 35%)
         m_no_with_spread = WeatherMarket(
             slug="KXHIGHMIA-TEST-B86.5",
             market_id="KXHIGHMIA-TEST-B86.5",
@@ -410,7 +410,7 @@ class TestC137QuantitativeCore(unittest.TestCase):
             cap_f=87.0,
             metric="high",
             direction="between",
-            yes_price=0.67,
+            yes_price=0.45,
             no_price=0.41,
         )
 
@@ -1511,6 +1511,160 @@ class TestC137QuantitativeCore(unittest.TestCase):
             self.assertEqual(mock_state.total_trades, 1)
 
         asyncio.run(run_dust_topup())
+
+    def test_market_divergence_phantom_edge_guard(self):
+        """
+        Verify C-137 Phantom Edge Guard:
+          1. Divergence > 35% vs liquid book without ratchet zero-outs edge.
+          2. Reasonable edge (< 35% divergence) passes threshold normally.
+        """
+        import asyncio
+        from datetime import date
+        from unittest.mock import patch, AsyncMock
+        from backend.data.weather_markets import WeatherMarket
+        from backend.data.weather import EnsembleForecast
+        import backend.core.weather_signals as ws_mod
+
+        today = date.today()
+        # Market where liquid ask is 70% YES (30% NO)
+        mkt_divergent = WeatherMarket(
+            slug="KXHIGHMIA-TEST-B85.5",
+            market_id="KXHIGHMIA-TEST-B85.5",
+            platform="kalshi",
+            title="Miami high 85-86F",
+            city_key="miami",
+            city_name="Miami",
+            target_date=today,
+            threshold_f=85.0,
+            cap_f=86.0,
+            metric="high",
+            direction="between",
+            yes_price=0.70,
+            no_price=0.30,
+        )
+        # Ensemble predicts cold (mean 80F -> 0/82 members in 85-86F -> model_yes_prob=0.15)
+        # Divergence = |0.15 - 0.70| = 55% > 35% max!
+        fc_cold = EnsembleForecast(
+            city_key="miami",
+            city_name="Miami",
+            target_date=today,
+            member_highs=[80.0] * 82,
+            member_lows=[70.0] * 82,
+        )
+
+        # Market where divergence is normal (model says 80%, market says 60% -> divergence = 20% <= 35%)
+        mkt_normal = WeatherMarket(
+            slug="KXHIGHCHI-TEST-B60.5",
+            market_id="KXHIGHCHI-TEST-B60.5",
+            platform="kalshi",
+            title="Chicago high 60-61F",
+            city_key="chicago",
+            city_name="Chicago",
+            target_date=today,
+            threshold_f=60.0,
+            cap_f=61.0,
+            metric="high",
+            direction="between",
+            yes_price=0.60,
+            no_price=0.40,
+        )
+        fc_normal = EnsembleForecast(
+            city_key="chicago",
+            city_name="Chicago",
+            target_date=today,
+            member_highs=[60.5] * 82,
+            member_lows=[50.0] * 82,
+        )
+
+        async def run_guard_checks():
+            with patch.object(ws_mod, "fetch_ensemble_forecast", AsyncMock(return_value=fc_cold)):
+                sig_div = await ws_mod.generate_weather_signal(mkt_divergent, bankroll=100.0)
+                self.assertIsNotNone(sig_div)
+                self.assertEqual(sig_div.edge, 0.0)
+                self.assertFalse(sig_div.passes_threshold)
+                self.assertIn("phantom edge guard", sig_div.reasoning)
+
+            with patch.object(ws_mod, "fetch_ensemble_forecast", AsyncMock(return_value=fc_normal)):
+                sig_norm = await ws_mod.generate_weather_signal(mkt_normal, bankroll=100.0)
+                self.assertIsNotNone(sig_norm)
+                self.assertGreater(sig_norm.edge, 0.0)
+                self.assertTrue(sig_norm.passes_threshold)
+
+        asyncio.run(run_guard_checks())
+
+    def test_city_date_concentration_cap_prevents_cluster_failure(self):
+        """
+        Verify scheduler skips a second live trade in the same city on the same target date
+        to prevent correlated cluster collapses.
+        """
+        import asyncio
+        from datetime import date
+        from unittest.mock import patch, AsyncMock, MagicMock
+        import backend.core.scheduler as sched_mod
+        from backend.data.weather_markets import WeatherMarket
+        from backend.core.weather_signals import WeatherTradingSignal
+        from backend.models.database import Trade
+
+        target = date(2026, 11, 10)
+        held_denver_trade = Trade(
+            id=101,
+            market_ticker="KXHIGHDEN-26NOV10-B67.5",
+            market_type="weather",
+            direction="yes",
+            entry_price=0.30,
+            size=4.0,
+            settled=False,
+            is_paper=False,
+        )
+
+        mkt_second_denver = WeatherMarket(
+            slug="KXHIGHDEN-26NOV10-B70.5",
+            market_id="KXHIGHDEN-26NOV10-B70.5",
+            platform="kalshi",
+            title="Denver high 70-71F",
+            city_key="denver",
+            city_name="Denver",
+            target_date=target,
+            threshold_f=70.0,
+            cap_f=71.0,
+            metric="high",
+            direction="between",
+            yes_price=0.50,
+            no_price=0.50,
+        )
+        sig_second_denver = WeatherTradingSignal(
+            market=mkt_second_denver,
+            model_probability=0.20,
+            market_probability=0.50,
+            edge=0.30,
+            direction="no",
+            confidence=0.80,
+            kelly_fraction=0.04,
+            suggested_size=3.0,
+        )
+
+        async def run_cap_test():
+            mock_db = MagicMock()
+            mock_state = MagicMock(bankroll=100.0, is_running=True, total_trades=1)
+            mock_db.query.return_value.first.return_value = mock_state
+            # Query returns held trade
+            mock_db.query.return_value.filter.return_value.all.return_value = [held_denver_trade]
+            mock_db.query.return_value.filter.return_value.first.return_value = None
+
+            order_mock = AsyncMock()
+            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_ORDERS", True), \
+                 patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig_second_denver])), \
+                 patch.object(sched_mod, "SessionLocal", return_value=mock_db), \
+                 patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
+                 patch("backend.data.kalshi_client.kalshi_credentials_present", return_value=True), \
+                 patch("backend.data.kalshi_client.KalshiClient.create_order", order_mock):
+                await sched_mod.weather_scan_and_trade_job()
+
+            # Second Denver trade on the same date must be skipped by concentration cap
+            self.assertEqual(order_mock.call_count, 0)
+            self.assertEqual(mock_db.add.call_count, 0)
+
+        asyncio.run(run_cap_test())
 
 
 if __name__ == "__main__":

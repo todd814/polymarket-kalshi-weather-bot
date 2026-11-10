@@ -74,6 +74,8 @@ class Settings(BaseSettings):
     WEATHER_MIN_ENTRY_PRICE: float = 0.06  # 6c minimum floor for Threshold (-T) contracts
     WEATHER_BRACKET_YES_MIN_PRICE: float = 0.12  # 12c minimum floor for Bracket (-B) YES contracts
     WEATHER_MAX_ENTRY_PRICE: float = 0.68  # 68c ceiling (data science audit: >68c had negative expectancy)
+    WEATHER_MAX_DIVERGENCE: float = 0.35  # 35% max divergence vs liquid order book before phantom edge guard triggers
+    WEATHER_MAX_POSITIONS_PER_CITY_DATE: int = 1  # Max 1 live position per city per date to prevent synoptic correlation collapse
     WEATHER_MAX_TRADE_SIZE: float = 5.0
     WEATHER_CITIES: str = "nyc,chicago,miami,los_angeles,denver,austin,houston,washington_dc,boston,philadelphia"
 

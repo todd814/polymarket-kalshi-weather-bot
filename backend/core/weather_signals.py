@@ -175,6 +175,15 @@ async def generate_weather_signal(
         edge = 0.0
         filter_notes.append(f"spread {spread:.0%} > {max_spread:.0%}")
 
+    # C-137 Phantom Edge Guard: When model diverges > 35% from a liquid book without ASOS ratchet confirmation,
+    # it is virtually always model basis risk (global grid missing local boundary-layer physics) rather than free alpha.
+    max_divergence = getattr(settings, "WEATHER_MAX_DIVERGENCE", 0.35)
+    divergence = abs(model_yes_prob - market_yes_prob)
+    if not ratchet_applied and spread <= max_spread and market_yes_prob < 1.0 and market_no_prob < 1.0:
+        if divergence > max_divergence:
+            edge = 0.0
+            filter_notes.append(f"divergence {divergence:.0%} > {max_divergence:.0%} (phantom edge guard)")
+
     # Kelly sizing using true entry price and current live bankroll
     if bankroll is None:
         bankroll = settings.INITIAL_BANKROLL
