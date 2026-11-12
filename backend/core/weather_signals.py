@@ -156,7 +156,8 @@ async def generate_weather_signal(
     max_spread = 0.10
 
     filter_notes = []
-    if not is_permitted:
+    # Deterministic ASOS ground-truth ratchets are exempt from statistical calibration lockouts
+    if not is_permitted and not ratchet_applied:
         edge = 0.0
         filter_notes.append(lockout_reason or "category locked")
 
