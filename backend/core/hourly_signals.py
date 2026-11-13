@@ -60,7 +60,10 @@ def compute_coastal_drift_and_sigma(
     drift = base_drift
     season_sigma_mult = ephem.sigma_mult if ephem else 1.0
     sky_sigma_mult = sky.sigma_mult if sky else 1.0
-    sigma = max(0.4, 1.1 * season_sigma_mult * sky_sigma_mult * math.sqrt(hours_to_close))
+    # Real-world urban boundary layer sigma floor: minimum 1.8°F
+    # Jet wash, runway asphalt, and convective gusts make 1-hour sub-1.0°F sigmas an overconfident illusion
+    sigma_floor = getattr(settings, "HOURLY_SIGMA_FLOOR", 1.8)
+    sigma = max(sigma_floor, 1.2 * season_sigma_mult * sky_sigma_mult * math.sqrt(hours_to_close))
     notes = []
 
     if ephem:
@@ -170,8 +173,15 @@ def evaluate_hourly_market(
     and coastal microclimate boundary layer modeling.
     """
     minutes_rem = market.minutes_remaining
-    if minutes_rem < 3.0 or minutes_rem > 180.0:
-        return None  # Only trade contracts between 3 minutes and 3 hours out
+    min_mins = getattr(settings, "HOURLY_MIN_MINUTES_TO_CLOSE", 3.0)
+    max_mins = getattr(settings, "HOURLY_MAX_MINUTES_TO_CLOSE", 35.0)
+    if minutes_rem < min_mins or minutes_rem > max_mins:
+        return None  # Only trade contracts between 3 minutes and 35 minutes out (avoids stale 50-minute METAR lag)
+
+    # Blacklist coastal marine stations (LAX & Miami non-linear marine layer chaos)
+    blacklisted = [c.strip().lower() for c in getattr(settings, "HOURLY_BLACKLISTED_CITIES", "").split(",") if c.strip()]
+    if market.city_key.lower() in blacklisted:
+        return None
 
     current_t = metar.temp_f
 
@@ -246,15 +256,19 @@ def evaluate_hourly_market(
     best_edge = 0.0
     market_price = 0.5
 
-    # Minimum edge hurdle: stricter for LAX coastal station & general nighttime
-    min_hurdle = 0.10 if market.city_key == "los_angeles" else (0.09 if is_night else 0.05)
+    # Minimum edge hurdle: stricter 8% base (or 10% night)
+    base_hurdle = getattr(settings, "HOURLY_MIN_EDGE_THRESHOLD", 0.08)
+    min_hurdle = (base_hurdle + 0.02) if is_night else base_hurdle
+    max_divergence = getattr(settings, "HOURLY_MAX_DIVERGENCE", 0.35)
 
     # YES Evaluation with 24/7 Price Collar ($0.12 to $0.68)
     if yes_ask is not None and 0.12 <= yes_ask <= 0.68:
+        divergence_yes = abs(model_prob - yes_ask)
         edge_yes = model_prob - yes_ask
         # Preventative Rule 1: Ban buying YES at night unless expected_t after cooling stays >= 0.5F above strike
         is_forbidden_night_yes = is_night and (market.threshold_f > (expected_t - 0.5))
-        if edge_yes >= min_hurdle and not is_forbidden_night_yes:
+        # Preventative Rule 2: C-137 Phantom Edge Guard (Max 35% divergence vs liquid book)
+        if divergence_yes <= max_divergence and edge_yes >= min_hurdle and not is_forbidden_night_yes:
             if edge_yes > best_edge:
                 best_edge = edge_yes
                 best_direction = "yes"
@@ -262,8 +276,11 @@ def evaluate_hourly_market(
 
     # NO Evaluation with 24/7 Price Collar ($0.12 to $0.68)
     if no_ask is not None and 0.12 <= no_ask <= 0.68:
-        edge_no = (1.0 - model_prob) - no_ask
-        if edge_no >= min_hurdle:
+        model_no_prob = 1.0 - model_prob
+        divergence_no = abs(model_no_prob - no_ask)
+        edge_no = model_no_prob - no_ask
+        # Preventative Rule 2: C-137 Phantom Edge Guard (Max 35% divergence vs liquid book)
+        if divergence_no <= max_divergence and edge_no >= min_hurdle:
             if edge_no > best_edge:
                 best_edge = edge_no
                 best_direction = "no"

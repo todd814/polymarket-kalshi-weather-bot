@@ -83,8 +83,13 @@ class Settings(BaseSettings):
     HOURLY_WEATHER_ENABLED: bool = True
     HOURLY_SCAN_INTERVAL_SECONDS: int = 120  # Scan every 2 minutes
     HOURLY_SETTLEMENT_INTERVAL_SECONDS: int = 300  # Check settlements every 5 minutes
-    HOURLY_MIN_EDGE_THRESHOLD: float = 0.05  # 5% edge hurdle
+    HOURLY_MIN_EDGE_THRESHOLD: float = 0.08  # Stricter 8% edge hurdle
     HOURLY_MAX_TRADE_SIZE: float = 5.0
+    HOURLY_MAX_DIVERGENCE: float = 0.35  # Phantom edge guard: max 35% divergence vs liquid book
+    HOURLY_MIN_MINUTES_TO_CLOSE: float = 3.0  # Min minutes remaining
+    HOURLY_MAX_MINUTES_TO_CLOSE: float = 35.0  # Max 35 minutes remaining (avoid stale 50-minute METAR lag)
+    HOURLY_SIGMA_FLOOR: float = 1.8  # Minimum standard deviation in deg F (realistic urban turbulence)
+    HOURLY_BLACKLISTED_CITIES: str = "los_angeles,miami"  # Exclude non-linear marine layer coastal chaos
 
     class Config:
         env_file = ".env"
