@@ -45,11 +45,13 @@ class SettlementCalibrationHarness:
         self,
         journal_path: str = "trade_journal.jsonl",
         brier_threshold: float = 0.245,
-        min_trades_for_audit: int = 3
+        min_trades_for_audit: int = 3,
+        rolling_window: int = 30,
     ):
         self.journal_path = journal_path
         self.brier_threshold = brier_threshold
         self.min_trades_for_audit = min_trades_for_audit
+        self.rolling_window = rolling_window
         self.settled_records: List[SettlementRecord] = []
         self.category_records: Dict[str, List[SettlementRecord]] = {
             "btc": [],
@@ -150,11 +152,12 @@ class SettlementCalibrationHarness:
         return record
 
     def get_category_brier(self, category: str) -> Optional[float]:
-        """Calculates current mean Brier score for a specific category."""
+        """Calculates rolling mean Brier score for a specific category."""
         records = self.category_records.get(category, [])
         if not records:
             return None
-        return sum(r.brier_contribution for r in records) / len(records)
+        window_recs = records[-self.rolling_window:] if self.rolling_window > 0 else records
+        return sum(r.brier_contribution for r in window_recs) / len(window_recs)
 
     def get_global_brier(self) -> Optional[float]:
         """Calculates overall Brier score across all settled markets."""
@@ -164,18 +167,19 @@ class SettlementCalibrationHarness:
 
     def evaluate_category_lockdowns(self) -> None:
         """
-        Frigo Kill Switch: If category Brier score > threshold AND cumulative P&L < 0
-        with sufficient sample size, lock it down instantly.
+        Frigo Kill Switch: If rolling category Brier score > threshold AND cumulative P&L < 0
+        with sufficient sample size, lock it down until recent performance recovers.
         Never lock down a net-profitable category.
         """
         for cat, recs in self.category_records.items():
-            if len(recs) >= self.min_trades_for_audit:
-                mean_brier = sum(r.brier_contribution for r in recs) / len(recs)
-                total_pnl = sum(r.pnl for r in recs)
+            window_recs = recs[-self.rolling_window:] if self.rolling_window > 0 else recs
+            if len(window_recs) >= self.min_trades_for_audit:
+                mean_brier = sum(r.brier_contribution for r in window_recs) / len(window_recs)
+                total_pnl = sum(r.pnl for r in window_recs)
                 if mean_brier > self.brier_threshold and total_pnl < 0:
                     self.locked_categories[cat] = (
                         f"NEGATIVE EDGE LOCKDOWN: Brier score {mean_brier:.4f} > limit {self.brier_threshold:.4f} "
-                        f"and P&L ${total_pnl:.2f} < $0 across {len(recs)} trades. Model is hallucinating."
+                        f"and P&L ${total_pnl:.2f} < $0 across {len(window_recs)} trades. Model is hallucinating."
                     )
                 elif cat in self.locked_categories and (mean_brier <= self.brier_threshold or total_pnl >= 0):
                     del self.locked_categories[cat]

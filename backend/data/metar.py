@@ -10,12 +10,12 @@ logger = logging.getLogger("trading_bot")
 
 CITY_STATIONS: Dict[str, str] = {
     "nyc": "KNYC",
-    "chicago": "KORD",
+    "chicago": "KMDW",
     "miami": "KMIA",
     "los_angeles": "KLAX",
     "denver": "KDEN",
     "austin": "KAUS",
-    "houston": "KIAH",
+    "houston": "KHOU",
     "washington_dc": "KDCA",
     "boston": "KBOS",
     "philadelphia": "KPHL",

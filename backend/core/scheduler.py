@@ -1,6 +1,6 @@
 """Background scheduler for BTC 5-min autonomous trading."""
 import asyncio
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -205,11 +205,23 @@ def _extract_ticker_city_and_date(ticker: str):
         "KXHIGHDEN": "denver",
         "KXHIGHAUS": "austin",
         "KXHIGHTHOU": "houston",
+        "KXHIGHTDC": "washington_dc",
         "KXHIGHDCA": "washington_dc",
+        "KXHIGHTBOS": "boston",
         "KXHIGHBOS": "boston",
         "KXHIGHPHIL": "philadelphia",
+        "KXHIGHPHL": "philadelphia",
     }
     return city_map.get(prefix), _parse_ticker_target_date(ticker)
+
+
+def _is_future_entry_window_open(now_utc: Optional[datetime] = None) -> bool:
+    """Delay T+1 live entries until 12Z NBM/ECMWF/GFS cycles publish and books deepen."""
+    min_hour = getattr(settings, "WEATHER_FUTURE_MIN_UTC_HOUR", 18)
+    if min_hour <= 0:
+        return True
+    dt = now_utc or datetime.now(timezone.utc)
+    return dt.hour >= min_hour
 
 
 def _compute_staged_weather_exposure(db, signals: list, today_est=None) -> tuple[float, float, float, int]:
@@ -336,12 +348,12 @@ async def weather_scan_and_trade_job():
             MAX_TRADES_PER_SCAN = 3
             MIN_TRADE_SIZE = max(1.0, round(state.bankroll * 0.01, 2))
 
-            # C-137 Staged Rolling Target-Date Vintage Caps:
-            # - Today (T+0): 25% of bankroll ($25.00 floor) for high-precision same-day + ASOS ratchet setups
-            # - Tomorrow/Future (T+1): 12.5% of bankroll ($12.50 floor) pre-allocation with 12% min edge hurdle;
+            # C-137 Staged Rolling Target-Date Vintage Caps (strictly proportional to live bankroll):
+            # - Today (T+0): 25% of bankroll for high-precision same-day + ASOS ratchet setups
+            # - Tomorrow/Future (T+1): 12.5% of bankroll pre-allocation with 12% min edge hurdle;
             #   automatically matures into the 25% Today bucket at midnight EST with >=12.5% dry powder left!
-            MAX_TODAY_ALLOCATION = max(25.0, round(state.bankroll * 0.25, 2))
-            MAX_FUTURE_ALLOCATION = max(12.5, round(state.bankroll * 0.125, 2))
+            MAX_TODAY_ALLOCATION = round(state.bankroll * 0.25, 2)
+            MAX_FUTURE_ALLOCATION = round(state.bankroll * 0.125, 2)
             FUTURE_MIN_EDGE_HURDLE = getattr(settings, "WEATHER_FUTURE_MIN_EDGE_THRESHOLD", 0.12)
 
             today_est = datetime.now(ZoneInfo("America/New_York")).date()
@@ -435,7 +447,15 @@ async def weather_scan_and_trade_job():
                             log_event("info", f"City concentration limit ({max_pos_per_city_date}) reached for {sig_city} on {sig_target_dt}; skipping correlated strike")
                             continue
 
+                    # Gate non-ratchet threshold (-T) contracts from live execution until bias-corrected NBM proves positive Brier
+                    is_ratchet_signal = (signal.model_probability >= 0.95 or signal.model_probability <= 0.05)
+                    is_threshold_contract = (getattr(signal.market, "direction", "") != "between")
+                    if is_threshold_contract and not is_ratchet_signal and not getattr(settings, "WEATHER_ALLOW_THRESHOLD_LIVE", False):
+                        continue
+
                     if is_future_contract:
+                        if not _is_future_entry_window_open():
+                            continue
                         if signal.edge < FUTURE_MIN_EDGE_HURDLE:
                             continue
                         if future_pending >= MAX_FUTURE_ALLOCATION:

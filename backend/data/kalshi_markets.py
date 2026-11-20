@@ -6,6 +6,7 @@ from typing import Dict, List, Optional
 
 from backend.config import settings
 from backend.data.kalshi_client import KalshiClient, kalshi_credentials_present
+from backend.data.weather import get_station_local_date
 from backend.data.weather_markets import WeatherMarket
 
 logger = logging.getLogger("trading_bot")
@@ -19,9 +20,9 @@ CITY_SERIES: Dict[str, str] = {
     "denver": "KXHIGHDEN",
     "austin": "KXHIGHAUS",
     "houston": "KXHIGHTHOU",
-    "washington_dc": "KXHIGHDCA",
-    "boston": "KXHIGHBOS",
-    "philadelphia": "KXHIGHPHL",
+    "washington_dc": "KXHIGHTDC",
+    "boston": "KXHIGHTBOS",
+    "philadelphia": "KXHIGHPHIL",
 }
 
 CITY_NAMES: Dict[str, str] = {
@@ -149,7 +150,6 @@ async def fetch_kalshi_weather_markets(
 
     client = KalshiClient()
     markets: List[WeatherMarket] = []
-    today = date.today()
 
     cities = city_keys or list(CITY_SERIES.keys())
 
@@ -158,6 +158,7 @@ async def fetch_kalshi_weather_markets(
         if not series:
             continue
 
+        city_today = get_station_local_date(city_key)
         city_name = CITY_NAMES.get(city_key, city_key)
         cursor = None
 
@@ -180,7 +181,7 @@ async def fetch_kalshi_weather_markets(
                     if not parsed:
                         continue
 
-                    if parsed["target_date"] < today:
+                    if parsed["target_date"] < city_today:
                         continue
 
                     yes_price = _extract_price(m, "yes_ask", "yes_ask_dollars") or 0.0

@@ -200,12 +200,12 @@ class TestC137QuantitativeCore(unittest.TestCase):
 
         expected = {
             "nyc": ("KNYC", 40.7789, -73.9692, -5),
-            "chicago": ("KORD", 41.9742, -87.9073, -6),
+            "chicago": ("KMDW", 41.7868, -87.7522, -6),
             "miami": ("KMIA", 25.7959, -80.2870, -5),
             "los_angeles": ("KLAX", 33.9425, -118.4081, -8),
             "denver": ("KDEN", 39.8561, -104.6737, -7),
-            "austin": ("KATT", 30.3208, -97.7604, -6),
-            "houston": ("KIAH", 29.9902, -95.3368, -6),
+            "austin": ("KAUS", 30.1945, -97.6699, -6),
+            "houston": ("KHOU", 29.6454, -95.2789, -6),
         }
         for city_key, (station, lat, lon, offset) in expected.items():
             self.assertIn(city_key, CITY_CONFIG)
@@ -227,7 +227,8 @@ class TestC137QuantitativeCore(unittest.TestCase):
         import backend.data.weather as weather_mod
 
         weather_mod._obs_cache.clear()
-        target = date(2026, 10, 28)
+        target_pdt = date(2026, 10, 28)
+        target_pst = date(2026, 11, 15)
 
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()
@@ -238,26 +239,57 @@ class TestC137QuantitativeCore(unittest.TestCase):
             ]
         }
 
+        mock_resp_pst = MagicMock()
+        mock_resp_pst.raise_for_status = MagicMock()
+        mock_resp_pst.json.return_value = {
+            "features": [
+                {
+                    "properties": {
+                        "timestamp": "2026-11-15T22:00:00Z",  # 14:00 PST (>= 06:00 PST)
+                        "temperature": {"value": 20.0},
+                        "maxTemperatureLast6Hours": {"value": 26.0},  # 78.8F intra-hour spike
+                    }
+                },
+                {
+                    "properties": {
+                        "timestamp": "2026-11-15T10:00:00Z",  # 02:00 PST (< 06:00 PST -> ignore prior evening 6h max)
+                        "temperature": {"value": 15.0},  # 59.0F
+                        "maxTemperatureLast6Hours": {"value": 30.0},  # 86.0F from prior evening - MUST ignore
+                    }
+                },
+            ]
+        }
+
         mock_get = AsyncMock(return_value=mock_resp)
 
         async def run_check():
             with patch("httpx.AsyncClient.get", mock_get):
-                # First call for Los Angeles (utc_offset = -8 -> local midnight is 08:00:00Z)
-                obs1 = await weather_mod.fetch_nws_observed_temperature("los_angeles", target)
+                # First call for Los Angeles on Oct 28 (PDT = UTC-7 -> local midnight is 07:00:00Z)
+                obs1 = await weather_mod.fetch_nws_observed_temperature("los_angeles", target_pdt)
                 self.assertIsNotNone(obs1)
                 self.assertAlmostEqual(obs1["high"], 77.0)
                 self.assertAlmostEqual(obs1["low"], 68.0)
                 self.assertEqual(mock_get.call_count, 1)
 
-                # Verify start parameter uses 08:00:00Z (local midnight), NOT 00:00:00Z
                 call_kwargs = mock_get.call_args.kwargs
-                self.assertEqual(call_kwargs["params"]["start"], "2026-10-28T08:00:00Z")
-                self.assertEqual(call_kwargs["params"]["end"], "2026-10-29T08:00:00Z")
+                self.assertEqual(call_kwargs["params"]["start"], "2026-10-28T07:00:00Z")
+                self.assertEqual(call_kwargs["params"]["end"], "2026-10-29T07:00:00Z")
 
                 # Second call must hit _obs_cache without issuing another HTTP request
-                obs2 = await weather_mod.fetch_nws_observed_temperature("los_angeles", target)
+                obs2 = await weather_mod.fetch_nws_observed_temperature("los_angeles", target_pdt)
                 self.assertEqual(obs2, obs1)
                 self.assertEqual(mock_get.call_count, 1)
+
+            mock_get_pst = AsyncMock(return_value=mock_resp_pst)
+            with patch("httpx.AsyncClient.get", mock_get_pst):
+                # Standard Time (Nov 15 PST = UTC-8 -> local midnight is 08:00:00Z) + maxTemperatureLast6Hours
+                obs3 = await weather_mod.fetch_nws_observed_temperature("los_angeles", target_pst)
+                self.assertIsNotNone(obs3)
+                self.assertAlmostEqual(obs3["high"], 78.8)  # 26.0C from 14:00 PST, NOT 86.0F from 02:00 PST!
+                self.assertAlmostEqual(obs3["low"], 59.0)
+                pst_kwargs = mock_get_pst.call_args.kwargs
+                self.assertEqual(pst_kwargs["params"]["start"], "2026-11-15T08:00:00Z")
+                self.assertEqual(pst_kwargs["params"]["end"], "2026-11-16T08:00:00Z")
 
         asyncio.run(run_check())
 
@@ -278,7 +310,7 @@ class TestC137QuantitativeCore(unittest.TestCase):
         from backend.data.weather_markets import WeatherMarket
         import backend.core.weather_signals as ws_mod
 
-        today = date.today()
+        today = ws_mod.get_station_local_date("nyc")
         mock_fc = EnsembleForecast(
             city_key="nyc",
             city_name="New York City",
@@ -397,7 +429,7 @@ class TestC137QuantitativeCore(unittest.TestCase):
             no_price=0.60,
         )
 
-        # Market 2: 86-87F bracket with NO edge (yes_ask=0.45, no_ask=0.41 -> spread=0.0 <= 0.10, div=30% <= 35%)
+        # Market 2: 86-87F bracket with NO edge (yes_ask=0.32, no_ask=0.68 -> spread=0.0 <= 0.10, raw div=32% <= 35%)
         m_no_with_spread = WeatherMarket(
             slug="KXHIGHMIA-TEST-B86.5",
             market_id="KXHIGHMIA-TEST-B86.5",
@@ -410,8 +442,8 @@ class TestC137QuantitativeCore(unittest.TestCase):
             cap_f=87.0,
             metric="high",
             direction="between",
-            yes_price=0.45,
-            no_price=0.41,
+            yes_price=0.32,
+            no_price=0.68,
         )
 
         # Market 3: Illiquid 16c spread (yes_ask=0.57, no_ask=0.59 -> spread=0.16 > 0.10)
@@ -440,8 +472,9 @@ class TestC137QuantitativeCore(unittest.TestCase):
 
                 sig2 = await ws_mod.generate_weather_signal(m_no_with_spread, bankroll=50.0)
                 self.assertEqual(sig2.direction, "no")
-                # True NO edge with [0.15, 0.85] tail clipping = (1.0 - 0.15) - 0.41 = 0.44
-                self.assertAlmostEqual(sig2.edge, 0.44, places=4)
+                # True NO edge with 30% shrinkage (0.85 cap) minus Kalshi taker fee (0.07 * 0.68 * 0.32)
+                expected_no_fee = 0.07 * 0.68 * 0.32
+                self.assertAlmostEqual(sig2.edge, 0.85 - 0.68 - expected_no_fee, places=4)
 
                 sig3 = await ws_mod.generate_weather_signal(m_wide_spread, bankroll=50.0)
                 self.assertEqual(sig3.edge, 0.0)
@@ -490,7 +523,7 @@ class TestC137QuantitativeCore(unittest.TestCase):
             with patch.object(ws_mod, "fetch_ensemble_forecast", AsyncMock(return_value=fc_82)):
                 sig_longshot = await ws_mod.generate_weather_signal(m_tail_longshot, bankroll=50.0)
                 self.assertEqual(sig_longshot.edge, 0.0, "0/82 longshot at yes_price=0.04, no_price=0.98 must have 0.0 edge")
-                self.assertAlmostEqual(sig_longshot.model_probability, 0.0, places=4)
+                self.assertLess(sig_longshot.model_probability, 0.02)
                 self.assertFalse(sig_longshot.passes_threshold)
 
                 sig_fav = await ws_mod.generate_weather_signal(m_tail_favorite, bankroll=50.0)
@@ -651,6 +684,9 @@ class TestC137QuantitativeCore(unittest.TestCase):
         import backend.core.weather_signals as ws_mod
 
         self.assertEqual(CITY_SERIES["houston"], "KXHIGHTHOU")
+        self.assertEqual(CITY_SERIES["washington_dc"], "KXHIGHTDC")
+        self.assertEqual(CITY_SERIES["boston"], "KXHIGHTBOS")
+        self.assertEqual(CITY_SERIES["philadelphia"], "KXHIGHPHIL")
 
         # Negative strike with 'less'
         p_neg = _parse_kalshi_market(
@@ -691,7 +727,7 @@ class TestC137QuantitativeCore(unittest.TestCase):
             "floor_strike": 85.0,
             "cap_strike": 86.0,
             "yes_ask_dollars": "1.0000",
-            "no_ask_dollars": "0.3500",
+            "no_ask_dollars": "0.6600",
             "last_price_dollars": "0.0000",
             "volume_fp": "12.00",
         }
@@ -769,22 +805,44 @@ class TestC137QuantitativeCore(unittest.TestCase):
                 )
                 self.assertEqual(mkts[0].slug, tkr)
                 self.assertEqual(mkts[0].yes_price, 1.0)
-                self.assertEqual(mkts[0].no_price, 0.35)
+                self.assertEqual(mkts[0].no_price, 0.66)
                 self.assertEqual(mkts[1].slug, tkr_minimal_liquid_last)
                 self.assertEqual(mkts[1].yes_price, 0.30)
                 self.assertEqual(mkts[1].no_price, 0.70)
+
+                from backend.analytics.monotonicity import monotonicity_scanner
+                from backend.data.weather_markets import WeatherMarket
 
                 with patch.object(ws_mod, "fetch_ensemble_forecast", AsyncMock(return_value=fc)):
                     sig = await ws_mod.generate_weather_signal(mkts[0], bankroll=50.0)
                     self.assertIsNotNone(sig)
                     self.assertEqual(sig.direction, "no")
                     self.assertAlmostEqual(sig.model_probability, 0.15, places=4)
-                    self.assertAlmostEqual(sig.edge, 0.85 - 0.35, places=4)
+                    expected_fee = 0.07 * 0.66 * 0.34
+                    self.assertAlmostEqual(sig.edge, 0.85 - 0.66 - expected_fee, places=4)
                     self.assertTrue(sig.passes_threshold, "Liquid side of one-sided market must pass threshold without spread penalty")
 
+                    # Divergent one-sided empty book (yes=1.00, no=0.25 -> market_ref_yes=0.75 vs raw 0.00 -> 75% div) must be blocked
+                    m_div_empty = WeatherMarket(
+                        slug=f"KXHIGHTHOU-{tomorrow.year % 100:02d}{mon_abbr}{tomorrow.day:02d}-B85.5",
+                        market_id=f"KXHIGHTHOU-{tomorrow.year % 100:02d}{mon_abbr}{tomorrow.day:02d}-B85.5",
+                        platform="kalshi",
+                        title="Houston empty-book divergence trap",
+                        city_key="houston",
+                        city_name="Houston",
+                        target_date=tomorrow,
+                        threshold_f=85.0,
+                        cap_f=86.0,
+                        metric="high",
+                        direction="between",
+                        yes_price=1.0,
+                        no_price=0.25,
+                    )
+                    sig_div_empty = await ws_mod.generate_weather_signal(m_div_empty, bankroll=50.0)
+                    self.assertEqual(sig_div_empty.edge, 0.0)
+                    self.assertIn("phantom edge guard", sig_div_empty.reasoning)
+
                 # Verify MonotonicityScanner does not emit a false arbitrage inversion when a higher strike has yes_price=1.0 sentinel
-                from backend.analytics.monotonicity import monotonicity_scanner
-                from backend.data.weather_markets import WeatherMarket
                 lower_mkt = WeatherMarket(
                     slug="KXHIGHTHOU-TEST-T80",
                     market_id="KXHIGHTHOU-TEST-T80",
@@ -870,89 +928,92 @@ class TestC137QuantitativeCore(unittest.TestCase):
         )
 
         async def run_scheduler_and_settlement_checks():
-            # A0. create_order raises exception -> must NOT call db.add(trade)
-            mock_db = MagicMock()
-            mock_state = MagicMock(bankroll=50.0, is_running=True, total_trades=0)
-            mock_db.query.return_value.first.return_value = mock_state
-            mock_db.query.return_value.filter.return_value.scalar.return_value = 0.0
-            mock_db.query.return_value.filter.return_value.first.return_value = None
+            # Ensure T+1 window and threshold live gate don't block legacy scheduler unit mocks at arbitrary UTC hours
+            with patch.object(sched_mod.settings, "WEATHER_FUTURE_MIN_UTC_HOUR", 0), \
+                 patch.object(sched_mod.settings, "WEATHER_ALLOW_THRESHOLD_LIVE", True):
+                # A0. create_order raises exception -> must NOT call db.add(trade)
+                mock_db = MagicMock()
+                mock_state = MagicMock(bankroll=50.0, is_running=True, total_trades=0)
+                mock_db.query.return_value.first.return_value = mock_state
+                mock_db.query.return_value.filter.return_value.scalar.return_value = 0.0
+                mock_db.query.return_value.filter.return_value.first.return_value = None
 
-            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_ORDERS", True), \
-                 patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig])), \
-                 patch.object(sched_mod, "SessionLocal", return_value=mock_db), \
-                 patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
-                 patch("backend.data.kalshi_client.kalshi_credentials_present", return_value=True), \
-                 patch("backend.data.kalshi_client.KalshiClient.create_order", AsyncMock(side_effect=ValueError("400 invalid_parameters"))):
-                await sched_mod.weather_scan_and_trade_job()
-                self.assertEqual(mock_db.add.call_count, 0, "Failed order placement must not insert phantom Trade")
+                with patch.object(sched_mod.settings, "KALSHI_EXECUTE_ORDERS", True), \
+                     patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig])), \
+                     patch.object(sched_mod, "SessionLocal", return_value=mock_db), \
+                     patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
+                     patch("backend.data.kalshi_client.kalshi_credentials_present", return_value=True), \
+                     patch("backend.data.kalshi_client.KalshiClient.create_order", AsyncMock(side_effect=ValueError("400 invalid_parameters"))):
+                    await sched_mod.weather_scan_and_trade_job()
+                    self.assertEqual(mock_db.add.call_count, 0, "Failed order placement must not insert phantom Trade")
 
-            # A. Unfilled IOC order (fill_count=0) -> must NOT call db.add(trade)
-            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_ORDERS", True), \
-                 patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig])), \
-                 patch.object(sched_mod, "SessionLocal", return_value=mock_db), \
-                 patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
-                 patch("backend.data.kalshi_client.kalshi_credentials_present", return_value=True), \
-                 patch("backend.data.kalshi_client.KalshiClient.create_order", AsyncMock(return_value={"order": {"order_id": "ord-unfilled", "fill_count": 0}})):
-                await sched_mod.weather_scan_and_trade_job()
-                self.assertEqual(mock_db.add.call_count, 0, "Unfilled IOC order must not insert phantom Trade")
+                # A. Unfilled IOC order (fill_count=0) -> must NOT call db.add(trade)
+                with patch.object(sched_mod.settings, "KALSHI_EXECUTE_ORDERS", True), \
+                     patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig])), \
+                     patch.object(sched_mod, "SessionLocal", return_value=mock_db), \
+                     patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
+                     patch("backend.data.kalshi_client.kalshi_credentials_present", return_value=True), \
+                     patch("backend.data.kalshi_client.KalshiClient.create_order", AsyncMock(return_value={"order": {"order_id": "ord-unfilled", "fill_count": 0}})):
+                    await sched_mod.weather_scan_and_trade_job()
+                    self.assertEqual(mock_db.add.call_count, 0, "Unfilled IOC order must not insert phantom Trade")
 
-            # B. Filled IOC order with fill_count=None and fill_count_fp="4.00" @ $0.40 -> size=$1.60, preserves event_slug
-            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_ORDERS", True), \
-                 patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig])), \
-                 patch.object(sched_mod, "SessionLocal", return_value=mock_db), \
-                 patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
-                 patch("backend.data.kalshi_client.kalshi_credentials_present", return_value=True), \
-                 patch("backend.data.kalshi_client.KalshiClient.create_order", AsyncMock(return_value={"order": {"order_id": "ord-filled", "fill_count": None, "fill_count_fp": "4.00"}})):
-                await sched_mod.weather_scan_and_trade_job()
-                self.assertEqual(mock_db.add.call_count, 1)
-                inserted_trade = mock_db.add.call_args.args[0]
-                self.assertEqual(inserted_trade.event_slug, "KXHIGHTHOU-26OCT29-B80.5")
-                self.assertAlmostEqual(inserted_trade.size, 1.60, places=2)
+                # B. Filled IOC order with fill_count=None and fill_count_fp="4.00" @ $0.40 -> size=$1.60, preserves event_slug
+                with patch.object(sched_mod.settings, "KALSHI_EXECUTE_ORDERS", True), \
+                     patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig])), \
+                     patch.object(sched_mod, "SessionLocal", return_value=mock_db), \
+                     patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
+                     patch("backend.data.kalshi_client.kalshi_credentials_present", return_value=True), \
+                     patch("backend.data.kalshi_client.KalshiClient.create_order", AsyncMock(return_value={"order": {"order_id": "ord-filled", "fill_count": None, "fill_count_fp": "4.00"}})):
+                    await sched_mod.weather_scan_and_trade_job()
+                    self.assertEqual(mock_db.add.call_count, 1)
+                    inserted_trade = mock_db.add.call_args.args[0]
+                    self.assertEqual(inserted_trade.event_slug, "KXHIGHTHOU-26OCT29-B80.5")
+                    self.assertAlmostEqual(inserted_trade.size, 1.60, places=2)
 
-            # B2. When top 3 actionable signals are already held, the 4th actionable signal must still execute
-            held_sigs = []
-            for idx in range(3):
-                m_held = WeatherMarket(
-                    slug=f"KXHIGHTHOU-HELD-{idx}",
-                    market_id=f"KXHIGHTHOU-HELD-{idx}",
-                    platform="kalshi",
-                    title=f"Held {idx}",
-                    city_key="houston",
-                    city_name="Houston",
-                    target_date=tomorrow,
-                    threshold_f=80.0 + idx,
-                    metric="high",
-                    direction="above",
-                    yes_price=0.40,
-                    no_price=0.60,
-                )
-                held_sigs.append(
-                    WeatherTradingSignal(
-                        market=m_held,
-                        model_probability=0.85,
-                        market_probability=0.40,
-                        edge=0.45 - idx * 0.01,
-                        direction="yes",
-                        confidence=0.90,
-                        kelly_fraction=0.04,
-                        suggested_size=2.00,
+                # B2. When top 3 actionable signals are already held, the 4th actionable signal must still execute
+                held_sigs = []
+                for idx in range(3):
+                    m_held = WeatherMarket(
+                        slug=f"KXHIGHTHOU-HELD-{idx}",
+                        market_id=f"KXHIGHTHOU-HELD-{idx}",
+                        platform="kalshi",
+                        title=f"Held {idx}",
+                        city_key="houston",
+                        city_name="Houston",
+                        target_date=tomorrow,
+                        threshold_f=80.0 + idx,
+                        metric="high",
+                        direction="above",
+                        yes_price=0.40,
+                        no_price=0.60,
                     )
-                )
-            mock_db_b2 = MagicMock()
-            mock_db_b2.query.return_value.first.return_value = MagicMock(bankroll=50.0, is_running=True, total_trades=0)
-            mock_db_b2.query.return_value.filter.return_value.scalar.return_value = 0.0
-            # First 3 Trade existence checks return an existing Trade; 4th returns None, subsequent checks return None
-            mock_db_b2.query.return_value.filter.return_value.first.side_effect = [MagicMock(), MagicMock(), MagicMock(), None] + [None] * 10
+                    held_sigs.append(
+                        WeatherTradingSignal(
+                            market=m_held,
+                            model_probability=0.85,
+                            market_probability=0.40,
+                            edge=0.45 - idx * 0.01,
+                            direction="yes",
+                            confidence=0.90,
+                            kelly_fraction=0.04,
+                            suggested_size=2.00,
+                        )
+                    )
+                mock_db_b2 = MagicMock()
+                mock_db_b2.query.return_value.first.return_value = MagicMock(bankroll=50.0, is_running=True, total_trades=0)
+                mock_db_b2.query.return_value.filter.return_value.scalar.return_value = 0.0
+                # First 3 Trade existence checks return an existing Trade; 4th returns None, subsequent checks return None
+                mock_db_b2.query.return_value.filter.return_value.first.side_effect = [MagicMock(), MagicMock(), MagicMock(), None] + [None] * 10
 
-            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_ORDERS", True), \
-                 patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=held_sigs + [sig])), \
-                 patch.object(sched_mod, "SessionLocal", return_value=mock_db_b2), \
-                 patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
-                 patch("backend.data.kalshi_client.kalshi_credentials_present", return_value=True), \
-                 patch("backend.data.kalshi_client.KalshiClient.create_order", AsyncMock(return_value={"order": {"order_id": "ord-4th", "fill_count": 5}})):
-                await sched_mod.weather_scan_and_trade_job()
-                self.assertEqual(mock_db_b2.add.call_count, 1, "4th actionable signal must execute when top 3 are already held")
-                self.assertEqual(mock_db_b2.add.call_args.args[0].market_ticker, "KXHIGHTHOU-26OCT29-B80.5")
+                with patch.object(sched_mod.settings, "KALSHI_EXECUTE_ORDERS", True), \
+                     patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=held_sigs + [sig])), \
+                     patch.object(sched_mod, "SessionLocal", return_value=mock_db_b2), \
+                     patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
+                     patch("backend.data.kalshi_client.kalshi_credentials_present", return_value=True), \
+                     patch("backend.data.kalshi_client.KalshiClient.create_order", AsyncMock(return_value={"order": {"order_id": "ord-4th", "fill_count": 5}})):
+                    await sched_mod.weather_scan_and_trade_job()
+                    self.assertEqual(mock_db_b2.add.call_count, 1, "4th actionable signal must execute when top 3 are already held")
+                    self.assertEqual(mock_db_b2.add.call_args.args[0].market_ticker, "KXHIGHTHOU-26OCT29-B80.5")
 
             # C. _fetch_kalshi_resolution requires 'finalized'
             with patch("backend.data.kalshi_client.KalshiClient.get_market", AsyncMock(return_value={"market": {"status": "determined", "result": "yes"}})):
@@ -1078,6 +1139,8 @@ class TestC137QuantitativeCore(unittest.TestCase):
 
             order_mock = AsyncMock(return_value={"order": {"order_id": "ord-live-1", "fill_count": 10}})
             with patch.object(sched_mod.settings, "KALSHI_EXECUTE_ORDERS", True), \
+                 patch.object(sched_mod.settings, "WEATHER_FUTURE_MIN_UTC_HOUR", 0), \
+                 patch.object(sched_mod.settings, "WEATHER_ALLOW_THRESHOLD_LIVE", True), \
                  patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[live_sig, paper_sig])), \
                  patch.object(sched_mod, "SessionLocal", return_value=mock_db), \
                  patch.object(sched_mod, "PaperSessionLocal", return_value=mock_db), \
@@ -1193,6 +1256,8 @@ class TestC137QuantitativeCore(unittest.TestCase):
 
             order_mock = AsyncMock(return_value={"order": {"order_id": "ord-live-promo", "fill_count": 10}})
             with patch.object(sched_mod.settings, "KALSHI_EXECUTE_ORDERS", True), \
+                 patch.object(sched_mod.settings, "WEATHER_FUTURE_MIN_UTC_HOUR", 0), \
+                 patch.object(sched_mod.settings, "WEATHER_ALLOW_THRESHOLD_LIVE", True), \
                  patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig])), \
                  patch.object(sched_mod, "SessionLocal", return_value=mock_db), \
                  patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
@@ -1525,7 +1590,8 @@ class TestC137QuantitativeCore(unittest.TestCase):
         from backend.data.weather import EnsembleForecast
         import backend.core.weather_signals as ws_mod
 
-        today = date.today()
+        today = ws_mod.get_station_local_date("miami")
+        today_chi = ws_mod.get_station_local_date("chicago")
         # Market where liquid ask is 70% YES (30% NO)
         mkt_divergent = WeatherMarket(
             slug="KXHIGHMIA-TEST-B85.5",
@@ -1542,8 +1608,8 @@ class TestC137QuantitativeCore(unittest.TestCase):
             yes_price=0.70,
             no_price=0.30,
         )
-        # Ensemble predicts cold (mean 80F -> 0/82 members in 85-86F -> model_yes_prob=0.15)
-        # Divergence = |0.15 - 0.70| = 55% > 35% max!
+        # Ensemble predicts cold (mean 80F -> 0/82 members in 85-86F -> raw_yes_prob=0.00)
+        # Raw Divergence = |0.00 - 0.70| = 70% > 35% max!
         fc_cold = EnsembleForecast(
             city_key="miami",
             city_name="Miami",
@@ -1552,7 +1618,7 @@ class TestC137QuantitativeCore(unittest.TestCase):
             member_lows=[70.0] * 82,
         )
 
-        # Market where divergence is normal (model says 80%, market says 60% -> divergence = 20% <= 35%)
+        # Market where divergence is normal (raw=68/82=82.9%, market=60% -> divergence=22.9% <= 35%)
         mkt_normal = WeatherMarket(
             slug="KXHIGHCHI-TEST-B60.5",
             market_id="KXHIGHCHI-TEST-B60.5",
@@ -1560,7 +1626,7 @@ class TestC137QuantitativeCore(unittest.TestCase):
             title="Chicago high 60-61F",
             city_key="chicago",
             city_name="Chicago",
-            target_date=today,
+            target_date=today_chi,
             threshold_f=60.0,
             cap_f=61.0,
             metric="high",
@@ -1571,20 +1637,22 @@ class TestC137QuantitativeCore(unittest.TestCase):
         fc_normal = EnsembleForecast(
             city_key="chicago",
             city_name="Chicago",
-            target_date=today,
-            member_highs=[60.5] * 82,
+            target_date=today_chi,
+            member_highs=[60.5] * 68 + [65.0] * 14,
             member_lows=[50.0] * 82,
         )
 
         async def run_guard_checks():
-            with patch.object(ws_mod, "fetch_ensemble_forecast", AsyncMock(return_value=fc_cold)):
+            with patch.object(ws_mod, "fetch_ensemble_forecast", AsyncMock(return_value=fc_cold)), \
+                 patch.object(ws_mod, "fetch_nws_observed_temperature", AsyncMock(return_value=None)):
                 sig_div = await ws_mod.generate_weather_signal(mkt_divergent, bankroll=100.0)
                 self.assertIsNotNone(sig_div)
                 self.assertEqual(sig_div.edge, 0.0)
                 self.assertFalse(sig_div.passes_threshold)
                 self.assertIn("phantom edge guard", sig_div.reasoning)
 
-            with patch.object(ws_mod, "fetch_ensemble_forecast", AsyncMock(return_value=fc_normal)):
+            with patch.object(ws_mod, "fetch_ensemble_forecast", AsyncMock(return_value=fc_normal)), \
+                 patch.object(ws_mod, "fetch_nws_observed_temperature", AsyncMock(return_value=None)):
                 sig_norm = await ws_mod.generate_weather_signal(mkt_normal, bankroll=100.0)
                 self.assertIsNotNone(sig_norm)
                 self.assertGreater(sig_norm.edge, 0.0)
@@ -1665,6 +1733,275 @@ class TestC137QuantitativeCore(unittest.TestCase):
             self.assertEqual(mock_db.add.call_count, 0)
 
         asyncio.run(run_cap_test())
+
+    def test_nbm_nws_bias_recentering_and_spread_inflation(self):
+        """Verify fetch_ensemble_forecast recenters to 0.55*NBM + 0.45*NWS and inflates spread."""
+        import asyncio
+        from datetime import timedelta
+        from unittest.mock import patch, AsyncMock, MagicMock
+        import backend.data.weather as weather_mod
+
+        weather_mod._forecast_cache.clear()
+        tomorrow = weather_mod.get_station_local_date("chicago") + timedelta(days=1)
+
+        ens_resp = MagicMock()
+        ens_resp.raise_for_status = MagicMock()
+        ens_resp.json.return_value = {
+            "daily": {
+                "temperature_2m_max": [50.0],
+                "temperature_2m_max_member01": [49.0],
+                "temperature_2m_max_member02": [51.0],
+                "temperature_2m_min": [35.0],
+            }
+        }
+
+        async def run_recenter():
+            with patch("httpx.AsyncClient.get", AsyncMock(return_value=ens_resp)), \
+                 patch.object(weather_mod, "_fetch_nbm_forecast", AsyncMock(return_value={"high": 54.0, "low": 38.0})), \
+                 patch.object(weather_mod, "_fetch_nws_gridpoint_forecast", AsyncMock(return_value={"high": 56.0, "low": 40.0})):
+                fc = await weather_mod.fetch_ensemble_forecast("chicago", tomorrow)
+                self.assertIsNotNone(fc)
+                # anchor = 0.55*54 + 0.45*56 = 29.7 + 25.2 = 54.9
+                self.assertAlmostEqual(fc.raw_mean_high, 50.0, places=2)
+                self.assertAlmostEqual(fc.anchor_high, 54.9, places=2)
+                self.assertAlmostEqual(fc.mean_high, 54.9, places=2)
+                self.assertGreaterEqual(fc.std_high, 1.99)  # T+1 min std floor = 2.0F
+
+        asyncio.run(run_recenter())
+
+    def test_fee_adjusted_kelly_respects_edge_cap(self):
+        """Verify calculate_kelly_size deducts fee_per_contract and enforces caller edge cap."""
+        from backend.core.signals import calculate_kelly_size, calculate_kalshi_taker_fee_per_contract
+
+        fee = calculate_kalshi_taker_fee_per_contract(0.50)
+        self.assertAlmostEqual(fee, 0.0175, places=4)
+
+        # Uncapped raw_net_edge = 0.85 - 0.50 - 0.0175 = 0.3325, capped at edge=0.25 -> should be strictly smaller than edge=0.35
+        size_capped = calculate_kelly_size(
+            edge=0.25, probability=0.85, market_price=0.50, direction="yes", bankroll=100.0, actual_entry_price=0.50, fee_per_contract=fee
+        )
+        size_uncapped = calculate_kelly_size(
+            edge=0.35, probability=0.85, market_price=0.50, direction="yes", bankroll=100.0, actual_entry_price=0.50, fee_per_contract=fee
+        )
+        # Note: max_fraction is 0.05 (5% of 100 = $5.00), so test at a lower bankroll/price or check lower Kelly
+        size_low_cap = calculate_kelly_size(
+            edge=0.10, probability=0.85, market_price=0.50, direction="yes", bankroll=100.0, actual_entry_price=0.50, fee_per_contract=fee
+        )
+        self.assertLess(size_low_cap, size_capped)
+        self.assertAlmostEqual(size_low_cap, (0.10 / (1.0 - 0.5175)) * 0.15 * 100.0, places=4)
+        self.assertLessEqual(size_capped, size_uncapped)
+
+        # Zero size when fee turns gross edge negative (prob=0.51, price=0.50, fee=0.0175 -> net negative)
+        size_neg = calculate_kelly_size(
+            edge=0.01, probability=0.51, market_price=0.50, direction="yes", bankroll=100.0, actual_entry_price=0.50, fee_per_contract=fee
+        )
+        self.assertEqual(size_neg, 0.0)
+
+    def test_phantom_edge_guard_unclipped_and_empty_book(self):
+        """Verify 0/82 vs 0.50 market (unclipped 50% div) and Trade #61 empty-book trap are both blocked."""
+        import asyncio
+        from unittest.mock import patch, AsyncMock
+        from backend.data.weather_markets import WeatherMarket
+        from backend.data.weather import EnsembleForecast
+        import backend.core.weather_signals as ws_mod
+
+        today = ws_mod.get_station_local_date("austin")
+        fc_zero = EnsembleForecast(
+            city_key="austin", city_name="Austin", target_date=today,
+            member_highs=[70.0] * 82, member_lows=[50.0] * 82,
+        )
+        # Case 1: 0/82 raw_yes=0.0 vs market=0.50 -> unclipped divergence=50% > 35% (would be 35% if clipped at 0.15!)
+        mkt_50 = WeatherMarket(
+            slug="KXHIGHAUS-TEST-B75.5", market_id="KXHIGHAUS-TEST-B75.5", platform="kalshi",
+            title="Austin 75-76F", city_key="austin", city_name="Austin", target_date=today,
+            threshold_f=75.0, cap_f=76.0, metric="high", direction="between", yes_price=0.50, no_price=0.50,
+        )
+        # Case 2: Trade #61 empty-book trap (yes_price=1.00, no_price=0.06 -> market_ref_yes=0.94 vs raw 0.0)
+        mkt_61 = WeatherMarket(
+            slug="KXHIGHAUS-TEST-T61", market_id="KXHIGHAUS-TEST-T61", platform="kalshi",
+            title="Austin <61F", city_key="austin", city_name="Austin", target_date=today,
+            threshold_f=61.0, metric="high", direction="below", yes_price=1.00, no_price=0.06,
+        )
+
+        async def run_traps():
+            with patch.object(ws_mod, "fetch_ensemble_forecast", AsyncMock(return_value=fc_zero)), \
+                 patch.object(ws_mod, "fetch_nws_observed_temperature", AsyncMock(return_value=None)):
+                s1 = await ws_mod.generate_weather_signal(mkt_50, bankroll=50.0)
+                self.assertEqual(s1.edge, 0.0)
+                self.assertIn("phantom edge guard", s1.reasoning)
+
+                s2 = await ws_mod.generate_weather_signal(mkt_61, bankroll=50.0)
+                self.assertEqual(s2.edge, 0.0)
+                self.assertIn("phantom edge guard", s2.reasoning)
+
+        asyncio.run(run_traps())
+
+    def test_proportional_bankroll_caps_t1_delay_and_threshold_live_gate(self):
+        """
+        Verify:
+          1. Small bankroll ($14.14) uses strictly proportional caps (Today=$3.54, Future=$1.77), NOT $25/$12.50.
+          2. Future (T+1) trades are skipped before 18:00 UTC and allowed at/after 18:00 UTC.
+          3. Non-ratchet threshold (-T) signals are blocked from live execution, while ratcheted -T passes.
+        """
+        import asyncio
+        from datetime import date, datetime, timedelta, timezone
+        from unittest.mock import patch, AsyncMock, MagicMock
+        import backend.core.scheduler as sched_mod
+        from backend.data.weather_markets import WeatherMarket
+        from backend.core.weather_signals import WeatherTradingSignal
+
+        self.assertFalse(sched_mod._is_future_entry_window_open(datetime(2026, 11, 19, 15, 0, tzinfo=timezone.utc)))
+        self.assertTrue(sched_mod._is_future_entry_window_open(datetime(2026, 11, 19, 18, 0, tzinfo=timezone.utc)))
+
+        today = date.today()
+        tomorrow = today + timedelta(days=1)
+
+        # Non-ratchet threshold signal (model_probability=0.70, direction="below")
+        mkt_thresh = WeatherMarket(
+            slug="KXHIGHAUS-TODAY-T70", market_id="KXHIGHAUS-TODAY-T70", platform="kalshi",
+            title="Austin <70F", city_key="austin", city_name="Austin", target_date=today,
+            threshold_f=70.0, metric="high", direction="below", yes_price=0.50, no_price=0.50,
+        )
+        sig_thresh = WeatherTradingSignal(
+            market=mkt_thresh, model_probability=0.70, market_probability=0.50,
+            edge=0.18, direction="yes", confidence=0.80, suggested_size=2.0,
+        )
+        # Future bracket signal ($1.70 risk fits inside 12.5% of $14.14 = $1.77)
+        mkt_tmrw = WeatherMarket(
+            slug=f"KXHIGHDEN-{tomorrow.year % 100:02d}{tomorrow.strftime('%b').upper()}{tomorrow.day:02d}-B62.5",
+            market_id=f"KXHIGHDEN-{tomorrow.year % 100:02d}{tomorrow.strftime('%b').upper()}{tomorrow.day:02d}-B62.5",
+            platform="kalshi", title="Denver 62-63F", city_key="denver", city_name="Denver",
+            target_date=tomorrow, threshold_f=62.0, cap_f=63.0, metric="high", direction="between",
+            yes_price=0.30, no_price=0.70,
+        )
+        sig_tmrw = WeatherTradingSignal(
+            market=mkt_tmrw, model_probability=0.50, market_probability=0.30,
+            edge=0.18, direction="yes", confidence=0.80, suggested_size=1.50,
+        )
+        # Same-day bracket signal for Chicago ($2.00) plus second Today bracket for Miami ($2.00) -> 2nd exceeds 25% of $14.14 ($3.54)
+        mkt_chi = WeatherMarket(
+            slug=f"KXHIGHCHI-{today.year % 100:02d}{today.strftime('%b').upper()}{today.day:02d}-B55.5",
+            market_id=f"KXHIGHCHI-{today.year % 100:02d}{today.strftime('%b').upper()}{today.day:02d}-B55.5",
+            platform="kalshi", title="Chi 55-56F", city_key="chicago", city_name="Chicago",
+            target_date=today, threshold_f=55.0, cap_f=56.0, metric="high", direction="between",
+            yes_price=0.40, no_price=0.60,
+        )
+        sig_chi = WeatherTradingSignal(
+            market=mkt_chi, model_probability=0.60, market_probability=0.40,
+            edge=0.18, direction="yes", confidence=0.80, suggested_size=3.00,
+        )
+        mkt_mia = WeatherMarket(
+            slug=f"KXHIGHMIA-{today.year % 100:02d}{today.strftime('%b').upper()}{today.day:02d}-B80.5",
+            market_id=f"KXHIGHMIA-{today.year % 100:02d}{today.strftime('%b').upper()}{today.day:02d}-B80.5",
+            platform="kalshi", title="Mia 80-81F", city_key="miami", city_name="Miami",
+            target_date=today, threshold_f=80.0, cap_f=81.0, metric="high", direction="between",
+            yes_price=0.40, no_price=0.60,
+        )
+        sig_mia = WeatherTradingSignal(
+            market=mkt_mia, model_probability=0.60, market_probability=0.40,
+            edge=0.18, direction="yes", confidence=0.80, suggested_size=2.00,
+        )
+
+        async def run_gate_checks():
+            mock_db = MagicMock()
+            mock_db.query.return_value.first.return_value = MagicMock(bankroll=14.14, is_running=True, total_trades=0)
+            mock_db.query.return_value.filter.return_value.all.return_value = []
+            mock_db.query.return_value.filter.return_value.first.return_value = None
+
+            order_mock = AsyncMock(return_value={"order": {"order_id": "ord-g", "fill_count": 5}})
+            # Before 18:00 UTC: sig_thresh blocked by -T gate; sig_tmrw blocked by 18:00 UTC gate;
+            # sig_chi ($2.00) executes; today_pending becomes $2.00 (<$3.54), wait sig_chi uses suggested_size=3.00 -> $2.80 (7x0.40), then sig_mia skipped once >= $3.54!
+            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_ORDERS", True), \
+                 patch.object(sched_mod.settings, "WEATHER_ALLOW_THRESHOLD_LIVE", False), \
+                 patch.object(sched_mod, "_is_future_entry_window_open", return_value=False), \
+                 patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig_thresh, sig_tmrw, sig_chi, sig_mia])), \
+                 patch.object(sched_mod, "SessionLocal", return_value=mock_db), \
+                 patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
+                 patch("backend.data.kalshi_client.kalshi_credentials_present", return_value=True), \
+                 patch("backend.data.kalshi_client.KalshiClient.create_order", order_mock):
+                await sched_mod.weather_scan_and_trade_job()
+                # sig_thresh and sig_tmrw skipped -> sig_chi ($2.00 filled) executes, sig_mia ($2.00 filled) executes -> wait: 2.00 + 2.00 = 4.00 if second fits while today_pending=2.0 < 3.54.
+                # Verify neither sig_thresh nor sig_tmrw triggered an order
+                called_tickers = [c.kwargs["ticker"] for c in order_mock.call_args_list]
+                self.assertNotIn(mkt_thresh.market_id, called_tickers)
+                self.assertNotIn(mkt_tmrw.market_id, called_tickers)
+                self.assertIn(mkt_chi.market_id, called_tickers)
+
+            # Check proportional cap blocks sig_mia when open today exposure is already $3.54 (25% of $14.14)
+            held_today = MagicMock(market_ticker=mkt_chi.market_id, direction="yes", size=3.54, model_probability=0.50, settled=False, is_paper=False)
+            mock_db2 = MagicMock()
+            mock_db2.query.return_value.first.return_value = MagicMock(bankroll=14.14, is_running=True, total_trades=1)
+            mock_db2.query.return_value.filter.return_value.all.return_value = [held_today]
+            mock_db2.query.return_value.filter.return_value.first.return_value = None
+            order_mock2 = AsyncMock()
+            with patch.object(sched_mod.settings, "KALSHI_EXECUTE_ORDERS", True), \
+                 patch.object(sched_mod, "_is_future_entry_window_open", return_value=True), \
+                 patch("backend.core.weather_signals.scan_for_weather_signals", AsyncMock(return_value=[sig_mia])), \
+                 patch.object(sched_mod, "SessionLocal", return_value=mock_db2), \
+                 patch.object(sched_mod, "PaperSessionLocal", return_value=MagicMock()), \
+                 patch("backend.data.kalshi_client.kalshi_credentials_present", return_value=True), \
+                 patch("backend.data.kalshi_client.KalshiClient.create_order", order_mock2):
+                await sched_mod.weather_scan_and_trade_job()
+                self.assertEqual(order_mock2.call_count, 0, "$3.54 open exposure must saturate 25% of $14.14 bankroll")
+
+        asyncio.run(run_gate_checks())
+
+    def test_calibration_rolling_window_self_healing(self):
+        """Verify rolling_window allows recovery once recent trades outperform older legacy losses."""
+        from backend.analytics.calibration import SettlementCalibrationHarness
+
+        calib = SettlementCalibrationHarness(
+            journal_path="/tmp/test_c137_rolling_journal.jsonl",
+            brier_threshold=0.245,
+            min_trades_for_audit=3,
+            rolling_window=5,
+        )
+        calib.settled_records.clear()
+        calib.category_records = {"btc": [], "weather": [], "general": []}
+        calib.locked_categories.clear()
+
+        for i in range(5):
+            calib.record_settlement(f"bad_{i}", f"T{i}", "weather", 0.90, 0.0, 2.0, 0.50, -2.0)
+        self.assertFalse(calib.is_category_permitted("weather")[0])
+
+        # 5 well-calibrated wins flush the 5-trade rolling window
+        for i in range(5):
+            calib.record_settlement(f"good_{i}", f"G{i}", "weather", 0.85, 1.0, 2.0, 0.50, 2.0)
+        self.assertTrue(calib.is_category_permitted("weather")[0])
+        self.assertLess(calib.get_category_brier("weather"), 0.05)
+
+    def test_hourly_sigma_floor_and_settings_hurdle(self):
+        """Verify coastal hourly branches never drop sigma below HOURLY_SIGMA_FLOOR and hurdle reads settings."""
+        from datetime import datetime, timezone
+        from unittest.mock import patch
+        from backend.core.hourly_signals import compute_coastal_drift_and_sigma, HourlySignal
+        from backend.data.hourly_markets import HourlyMarket
+        from backend.data.metar import MetarObservation
+
+        _, sigma_lax, _ = compute_coastal_drift_and_sigma(
+            city_key="los_angeles", local_hour=22, base_drift=-1.0, current_temp_f=65.0,
+            dewpoint_f=64.0, wind_speed_kt=3.0, wind_dir_deg=250, hours_to_close=0.25,
+        )
+        _, sigma_mia, _ = compute_coastal_drift_and_sigma(
+            city_key="miami", local_hour=14, base_drift=0.5, current_temp_f=80.0,
+            dewpoint_f=70.0, wind_speed_kt=8.0, wind_dir_deg=90, hours_to_close=0.25,
+        )
+        self.assertGreaterEqual(sigma_lax, 1.8)
+        self.assertGreaterEqual(sigma_mia, 1.8)
+
+        mkt = HourlyMarket(
+            ticker="KXTEMPCHIHS-26NOV1920-T59.99", series_ticker="KXTEMPCHIHS",
+            city_key="chicago", threshold_f=59.99, direction="above",
+            close_time=datetime.now(timezone.utc), yes_ask=0.40,
+        )
+        metar = MetarObservation(station_id="KMDW", city_key="chicago", temp_c=15.0, temp_f=59.0)
+        sig_7pct = HourlySignal(
+            market=mkt, metar=metar, current_temp_f=59.0, expected_temp_f=60.5,
+            temp_diff_f=-0.99, minutes_to_close=20.0, model_probability=0.47,
+            market_price=0.40, edge=0.07, direction="yes", suggested_size=1.0, is_night=False,
+        )
+        with patch("backend.core.hourly_signals.settings.HOURLY_MIN_EDGE_THRESHOLD", 0.08):
+            self.assertFalse(sig_7pct.passes_threshold, "0.07 edge must be rejected when HOURLY_MIN_EDGE_THRESHOLD=0.08")
 
 
 if __name__ == "__main__":

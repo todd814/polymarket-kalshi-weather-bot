@@ -71,13 +71,20 @@ class Settings(BaseSettings):
     WEATHER_MIN_EDGE_THRESHOLD: float = 0.08  # 8% — weather has more signal than 5-min BTC
     WEATHER_FUTURE_MIN_EDGE_THRESHOLD: float = 0.12  # 12% — stricter hurdle for T+1 (Tomorrow) pre-allocation
     WEATHER_PAPER_MIN_EDGE_THRESHOLD: float = 0.03  # 3% — shadow paper trading hurdle for volume data collection
-    WEATHER_MIN_ENTRY_PRICE: float = 0.06  # 6c minimum floor for Threshold (-T) contracts
-    WEATHER_BRACKET_YES_MIN_PRICE: float = 0.12  # 12c minimum floor for Bracket (-B) YES contracts
+    WEATHER_MIN_ENTRY_PRICE: float = 0.20  # 20c minimum floor (<20c had 0W/13L in live)
+    WEATHER_BRACKET_YES_MIN_PRICE: float = 0.20  # 20c minimum floor for Bracket (-B) YES contracts
     WEATHER_MAX_ENTRY_PRICE: float = 0.68  # 68c ceiling (data science audit: >68c had negative expectancy)
     WEATHER_MAX_DIVERGENCE: float = 0.35  # 35% max divergence vs liquid order book before phantom edge guard triggers
     WEATHER_MAX_POSITIONS_PER_CITY_DATE: int = 1  # Max 1 live position per city per date to prevent synoptic correlation collapse
     WEATHER_MAX_TRADE_SIZE: float = 5.0
     WEATHER_CITIES: str = "nyc,chicago,miami,los_angeles,denver,austin,houston,washington_dc,boston,philadelphia"
+    WEATHER_MARKET_SHRINKAGE_WEIGHT: float = 0.30  # 30% Bayesian shrinkage toward market prior; 70% bias-corrected model
+    WEATHER_ALLOW_THRESHOLD_LIVE: bool = False  # Block non-ratchet -T threshold trades for live execution (paper still tracks)
+    WEATHER_FUTURE_MIN_UTC_HOUR: int = 18  # Delay live T+1 entries until 18:00 UTC (1 PM EST) after 12Z NBM/ECMWF/GFS cycles publish
+    WEATHER_ENSEMBLE_STD_INFLATION: float = 1.35  # Correct empirical ensemble underdispersion
+    WEATHER_ENSEMBLE_MIN_STD_T0: float = 1.3  # Minimum calibrated std (deg F) for T+0
+    WEATHER_ENSEMBLE_MIN_STD_T1: float = 2.0  # Minimum calibrated std (deg F) for T+1+
+    WEATHER_CALIBRATION_ROLLING_WINDOW: int = 30  # Rolling trade window for Brier kill-switch
 
     # Hourly weather trading settings (100% paper-only)
     HOURLY_WEATHER_ENABLED: bool = True

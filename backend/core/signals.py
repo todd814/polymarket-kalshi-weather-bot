@@ -74,22 +74,30 @@ def calculate_edge(
         return down_edge, "down"
 
 
+def calculate_kalshi_taker_fee_per_contract(price: float) -> float:
+    """Exact Kalshi per-contract taker fee: 0.07 * P * (1 - P)."""
+    if price <= 0.0 or price >= 1.0:
+        return 0.0
+    return 0.07 * price * (1.0 - price)
+
+
 def calculate_kelly_size(
     edge: float,
     probability: float,
     market_price: float,
     direction: str,
     bankroll: float,
-    actual_entry_price: Optional[float] = None
+    actual_entry_price: Optional[float] = None,
+    fee_per_contract: float = 0.0,
 ) -> float:
     """
     Calculate position size using fractional Kelly criterion for binary options.
 
-    Formula: f* = (win_prob - price) / (1 - price)
+    Formula: f* = min(edge, win_prob - effective_price) / (1 - effective_price)
     where:
         f* = optimal fraction of bankroll to wager
         win_prob = model's estimated win probability
-        price = actual ask price paid (incorporating spread)
+        effective_price = actual ask price paid + per-contract transaction fee
     """
     if direction in ("up", "yes"):
         win_prob = probability
@@ -98,17 +106,21 @@ def calculate_kelly_size(
         win_prob = 1.0 - probability
         price = actual_entry_price if actual_entry_price is not None else (1.0 - market_price)
 
-    if price <= 0.01 or price >= 0.99:
+    effective_price = price + max(0.0, fee_per_contract)
+
+    if effective_price <= 0.01 or effective_price >= 0.99:
         return 0.0
 
-    # If win probability is not strictly greater than entry price, EV is negative
-    if win_prob <= price:
+    raw_net_edge = win_prob - effective_price
+    # If win probability is not strictly greater than effective cost, EV is negative
+    if raw_net_edge <= 0.0:
         return 0.0
+
+    # Respect the caller's edge cap when provided (e.g. 25% cap from weather_signals)
+    used_edge = min(raw_net_edge, edge) if (edge is not None and edge > 0.0) else raw_net_edge
 
     # Binary prediction market Kelly formula:
-    # odds b = (1 - price) / price
-    # f = (win_prob * b - (1 - win_prob)) / b = (win_prob - price) / (1 - price)
-    kelly = (win_prob - price) / (1.0 - price)
+    kelly = used_edge / (1.0 - effective_price)
 
     # Apply fractional Kelly
     kelly *= settings.KELLY_FRACTION

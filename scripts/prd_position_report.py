@@ -36,15 +36,18 @@ if str(ROOT_DIR) not in sys.path:
 
 CITY_PREFIX_MAP = {
     "KXHIGHNY": ("nyc", "New York (KNYC)"),
-    "KXHIGHCHI": ("chicago", "Chicago (KORD)"),
+    "KXHIGHCHI": ("chicago", "Chicago (KMDW)"),
     "KXHIGHMIA": ("miami", "Miami (KMIA)"),
     "KXHIGHLAX": ("los_angeles", "Los Angeles (KLAX)"),
     "KXHIGHDEN": ("denver", "Denver (KDEN)"),
-    "KXHIGHAUS": ("austin", "Austin (KATT)"),
-    "KXHIGHTHOU": ("houston", "Houston (KIAH)"),
+    "KXHIGHAUS": ("austin", "Austin (KAUS)"),
+    "KXHIGHTHOU": ("houston", "Houston (KHOU)"),
+    "KXHIGHTDC": ("washington_dc", "Wash DC (KDCA)"),
     "KXHIGHDCA": ("washington_dc", "Wash DC (KDCA)"),
+    "KXHIGHTBOS": ("boston", "Boston (KBOS)"),
     "KXHIGHBOS": ("boston", "Boston (KBOS)"),
     "KXHIGHPHIL": ("philadelphia", "Philly (KPHL)"),
+    "KXHIGHPHL": ("philadelphia", "Philly (KPHL)"),
 }
 
 

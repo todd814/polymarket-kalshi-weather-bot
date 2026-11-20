@@ -2,6 +2,7 @@
 import httpx
 import json
 import logging
+import math
 from datetime import datetime, date
 from typing import Optional, List, Tuple
 from sqlalchemy.orm import Session
@@ -143,8 +144,8 @@ def calculate_pnl(trade: Trade, settlement_value: float) -> float:
     p = max(0.01, min(0.99, trade.entry_price or 0.50))
     capital_risked = trade.size
     contracts = capital_risked / p
-    # Realistic taker exchange fee (~$0.01 per contract)
-    fee = round(contracts * 0.01, 2)
+    # Exact Kalshi taker fee formula: ceil(0.07 * C * P * (1 - P) to next cent)
+    fee = math.ceil(0.07 * contracts * p * (1.0 - p) * 100.0) / 100.0
 
     if won:
         gross_profit = capital_risked * (1.0 - p) / p
@@ -214,7 +215,7 @@ async def _fetch_nws_resolution(trade: Trade, db: Optional[Session] = None) -> T
     """
     try:
         from backend.data.kalshi_markets import MONTH_ABBR, CITY_SERIES
-        from backend.data.weather import fetch_nws_observed_temperature
+        from backend.data.weather import fetch_nws_observed_temperature, get_station_local_date
         import re
         from datetime import date
 
@@ -263,8 +264,8 @@ async def _fetch_nws_resolution(trade: Trade, db: Optional[Session] = None) -> T
         if not target_date:
             return False, None
 
-        # Only finalize against NWS observations if target date has completed (past date)
-        if target_date >= date.today():
+        # Only finalize against NWS observations if target date has completed in station's local timezone
+        if target_date >= get_station_local_date(city_key):
             return False, None
 
         obs = await fetch_nws_observed_temperature(city_key, target_date)

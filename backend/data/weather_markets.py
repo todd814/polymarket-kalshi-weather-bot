@@ -166,29 +166,28 @@ async def fetch_polymarket_weather_markets(city_keys: Optional[List[str]] = None
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            # Search for weather/temperature events
-            for search_term in ["temperature", "weather high", "weather low"]:
-                try:
-                    response = await client.get(
-                        "https://gamma-api.polymarket.com/events",
-                        params={
-                            "closed": "false",
-                            "limit": 100,
-                            "tag": "Weather",
-                        }
-                    )
-                    response.raise_for_status()
-                    events = response.json()
+            # Fetch open Weather-tagged events once (no redundant duplicate calls)
+            try:
+                response = await client.get(
+                    "https://gamma-api.polymarket.com/events",
+                    params={
+                        "closed": "false",
+                        "limit": 100,
+                        "tag": "Weather",
+                    }
+                )
+                response.raise_for_status()
+                events = response.json()
 
-                    for event in events:
-                        event_slug = event.get("slug", "")
-                        for market_data in event.get("markets", []):
-                            market = _parse_polymarket_weather(market_data, event_slug, city_keys)
-                            if market:
-                                markets.append(market)
+                for event in events:
+                    event_slug = event.get("slug", "")
+                    for market_data in event.get("markets", []):
+                        market = _parse_polymarket_weather(market_data, event_slug, city_keys)
+                        if market and not any(m.market_id == market.market_id for m in markets):
+                            markets.append(market)
 
-                except Exception as e:
-                    logger.debug(f"Weather market search for '{search_term}' failed: {e}")
+            except Exception as e:
+                logger.debug(f"Weather tag market search failed: {e}")
 
             # Also try slug-based search for known patterns
             for slug_pattern in ["weather", "temperature", "temp-"]:
@@ -239,8 +238,9 @@ def _parse_polymarket_weather(
     if city_keys and parsed["city_key"] not in city_keys:
         return None
 
-    # Only trade markets for dates in the future (or today)
-    if parsed["target_date"] < date.today():
+    # Only trade markets for dates in the future (or today in station local timezone)
+    from backend.data.weather import get_station_local_date
+    if parsed["target_date"] < get_station_local_date(parsed["city_key"]):
         return None
 
     # Parse prices

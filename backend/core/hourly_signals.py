@@ -85,7 +85,7 @@ def compute_coastal_drift_and_sigma(
         if is_onshore and has_breeze and not is_night and local_hour >= 11:
             notes.append(f"Onshore {wind_dir_deg}°@{wind_speed_kt:.0f}kt marine surge (SST {sst_floor:.0f}°F)")
             drift = min(drift, 0.0)  # Afternoon sea breeze halts warming
-            sigma = max(0.6, 1.4 * season_sigma_mult * math.sqrt(hours_to_close))
+            sigma = max(sigma_floor, 1.4 * season_sigma_mult * math.sqrt(hours_to_close))
 
         # 2. Nighttime Coastal Radiational Cooling & Marine Inversion
         elif is_night:
@@ -105,17 +105,17 @@ def compute_coastal_drift_and_sigma(
                 notes.append("Calm radiative boundary decoupling")
                 drift = min(drift, -1.2)
 
-            sigma = max(0.5, 1.2 * season_sigma_mult * math.sqrt(hours_to_close))
+            sigma = max(sigma_floor, 1.2 * season_sigma_mult * math.sqrt(hours_to_close))
 
         # 3. Offshore Santa Ana dry flow
         elif wind_dir_deg is not None and (30 <= wind_dir_deg <= 90):
             notes.append(f"Offshore {wind_dir_deg}° dry flow")
-            sigma = max(0.4, 1.0 * season_sigma_mult * math.sqrt(hours_to_close))
+            sigma = max(sigma_floor, 1.0 * season_sigma_mult * math.sqrt(hours_to_close))
 
         if dewp_depression <= 3.0:
             notes.append("Marine fog/stratus ceiling (T-Td<=3°F)")
             drift = min(drift, -0.3)
-            sigma = max(0.3, 0.8 * math.sqrt(hours_to_close))
+            sigma = max(sigma_floor, 0.8 * math.sqrt(hours_to_close))
 
     elif city_key == "miami":
         # Tropical maritime environment (seasonal SST & heat/cool efficiency handled in SEASONAL_METRO_MATRIX)
@@ -127,7 +127,7 @@ def compute_coastal_drift_and_sigma(
             if not is_night and local_hour >= 12:
                 drift = min(drift, 0.2)
 
-        sigma = max(0.5, 1.25 * season_sigma_mult * math.sqrt(hours_to_close))
+        sigma = max(sigma_floor, 1.25 * season_sigma_mult * math.sqrt(hours_to_close))
 
     elif city_key in ("nyc", "boston", "philadelphia"):
         if wind_dir_deg is not None and 60 <= wind_dir_deg <= 160 and wind_speed_kt and wind_speed_kt >= 7.0:
@@ -159,8 +159,9 @@ class HourlySignal:
 
     @property
     def passes_threshold(self) -> bool:
-        """Check if edge meets the hourly hurdle threshold (higher hurdle for coastal stations & nighttime)."""
-        hurdle = 0.10 if self.market.city_key == "los_angeles" else (0.09 if self.is_night else 0.06)
+        """Check if edge meets the configured hourly hurdle threshold (stricter at night)."""
+        base_hurdle = getattr(settings, "HOURLY_MIN_EDGE_THRESHOLD", 0.08)
+        hurdle = (base_hurdle + 0.02) if self.is_night else base_hurdle
         return self.edge >= hurdle and self.suggested_size > 0.0
 
 

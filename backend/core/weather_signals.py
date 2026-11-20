@@ -6,8 +6,14 @@ from typing import List, Optional
 
 from backend.config import settings
 from backend.core.seasonal_physics import CLIMATOLOGICAL_NORMALS_F, get_season_name
-from backend.core.signals import calculate_edge, calculate_kelly_size
-from backend.data.weather import fetch_ensemble_forecast, fetch_nws_observed_temperature, EnsembleForecast, CITY_CONFIG
+from backend.core.signals import calculate_edge, calculate_kalshi_taker_fee_per_contract, calculate_kelly_size
+from backend.data.weather import (
+    CITY_CONFIG,
+    EnsembleForecast,
+    fetch_ensemble_forecast,
+    fetch_nws_observed_temperature,
+    get_station_local_date,
+)
 from backend.data.weather_markets import WeatherMarket, fetch_polymarket_weather_markets
 from backend.models.database import SessionLocal, PaperSessionLocal, Signal
 
@@ -84,11 +90,12 @@ async def generate_weather_signal(
             model_yes_prob = forecast.probability_low_below(market.threshold_f)
 
     # --- C-137 High-Water Mark Ratchet (Live ASOS surface observations) ---
-    is_same_day = (market.target_date == date.today())
+    station_today = get_station_local_date(market.city_key)
+    is_same_day = (market.target_date == station_today)
     ratchet_applied = False
     if is_same_day and market.metric == "high":
         try:
-            obs = await fetch_nws_observed_temperature(market.city_key, date.today())
+            obs = await fetch_nws_observed_temperature(market.city_key, station_today)
             if obs and obs.get("high") is not None:
                 observed_high = obs["high"]
                 if market.direction in ("above", "greater"):
@@ -110,38 +117,53 @@ async def generate_weather_signal(
         except Exception as e:
             logger.debug(f"Failed to check ASOS ratchet for {market.city_key}: {e}")
 
-    # Agreement on the contract's specific event (before probability clipping)
+    # Agreement on the contract's specific event (before shrinkage & probability clipping)
     agreement_frac = max(model_yes_prob, 1.0 - model_yes_prob)
     confidence = min(0.9, agreement_frac)
 
-    # Cap directional win probability at 0.85 when ratchet wasn't applied so we
-    # never overestimate confidence on our chosen side or invent a 15% YES floor on 0/82 longshots
     raw_yes_prob = model_yes_prob
+    market_yes_prob = market.yes_price
+    market_no_prob = market.no_price if (market.no_price and market.no_price > 0) else (1.0 - market_yes_prob)
+
+    # Clean reference market probability (handles Kalshi 1.0000 empty-book sentinel on one side)
+    if 0.0 < market_yes_prob < 1.0 and 0.0 < market_no_prob < 1.0:
+        market_ref_yes = 0.5 * (market_yes_prob + (1.0 - market_no_prob))
+    elif market_yes_prob >= 1.0 and 0.0 < market_no_prob < 1.0:
+        market_ref_yes = 1.0 - market_no_prob
+    elif market_no_prob >= 1.0 and 0.0 < market_yes_prob < 1.0:
+        market_ref_yes = market_yes_prob
+    else:
+        market_ref_yes = 0.5
+
+    # Bayesian shrinkage toward market prior + 0.85 confidence cap when ratchet wasn't applied
     if not ratchet_applied:
-        yes_win_prob = min(0.85, raw_yes_prob)
-        no_win_prob = min(0.85, 1.0 - raw_yes_prob)
+        shrink_w = getattr(settings, "WEATHER_MARKET_SHRINKAGE_WEIGHT", 0.30)
+        shrunk_yes_prob = (1.0 - shrink_w) * raw_yes_prob + shrink_w * market_ref_yes
+        yes_win_prob = min(0.85, shrunk_yes_prob)
+        no_win_prob = min(0.85, 1.0 - shrunk_yes_prob)
     else:
         yes_win_prob = raw_yes_prob
         no_win_prob = 1.0 - raw_yes_prob
 
-    market_yes_prob = market.yes_price
-    market_no_prob = market.no_price if (market.no_price and market.no_price > 0) else (1.0 - market_yes_prob)
-
-    # Compute true directional edge against the actual ask price of each side
-    yes_edge = yes_win_prob - market_yes_prob
-    no_edge = no_win_prob - market_no_prob
+    # Fee-adjusted directional edge against the actual ask price of each side
+    yes_fee = calculate_kalshi_taker_fee_per_contract(market_yes_prob) if market.platform == "kalshi" else 0.0
+    no_fee = calculate_kalshi_taker_fee_per_contract(market_no_prob) if market.platform == "kalshi" else 0.0
+    yes_edge = yes_win_prob - market_yes_prob - yes_fee
+    no_edge = no_win_prob - market_no_prob - no_fee
 
     if yes_edge >= no_edge:
         direction = "yes"
         direction_raw = "up"
         edge = max(0.0, yes_edge)
         entry_price = market_yes_prob
+        entry_fee = yes_fee
         model_yes_prob = yes_win_prob
     else:
         direction = "no"
         direction_raw = "down"
         edge = max(0.0, no_edge)
         entry_price = market_no_prob
+        entry_fee = no_fee
         model_yes_prob = 1.0 - no_win_prob
 
     # Pre-flight calibration check & orderbook spread / entry price filters
@@ -162,9 +184,9 @@ async def generate_weather_signal(
         filter_notes.append(lockout_reason or "category locked")
 
     min_entry_price = (
-        getattr(settings, "WEATHER_BRACKET_YES_MIN_PRICE", 0.12)
+        getattr(settings, "WEATHER_BRACKET_YES_MIN_PRICE", 0.20)
         if (market.direction == "between" and direction == "yes")
-        else getattr(settings, "WEATHER_MIN_ENTRY_PRICE", 0.06)
+        else getattr(settings, "WEATHER_MIN_ENTRY_PRICE", 0.20)
     )
     if entry_price < min_entry_price:
         edge = 0.0
@@ -176,16 +198,16 @@ async def generate_weather_signal(
         edge = 0.0
         filter_notes.append(f"spread {spread:.0%} > {max_spread:.0%}")
 
-    # C-137 Phantom Edge Guard: When model diverges > 35% from a liquid book without ASOS ratchet confirmation,
-    # it is virtually always model basis risk (global grid missing local boundary-layer physics) rather than free alpha.
+    # C-137 Phantom Edge Guard: measure unclipped raw model probability vs market_ref_yes,
+    # including one-sided empty books (fixes Trade #61 and 0.15 clipping loopholes).
     max_divergence = getattr(settings, "WEATHER_MAX_DIVERGENCE", 0.35)
-    divergence = abs(model_yes_prob - market_yes_prob)
-    if not ratchet_applied and spread <= max_spread and market_yes_prob < 1.0 and market_no_prob < 1.0:
+    divergence = abs(raw_yes_prob - market_ref_yes)
+    if not ratchet_applied and spread <= max_spread:
         if divergence > max_divergence:
             edge = 0.0
             filter_notes.append(f"divergence {divergence:.0%} > {max_divergence:.0%} (phantom edge guard)")
 
-    # Kelly sizing using true entry price and current live bankroll
+    # Kelly sizing using true entry price, fee deduction, and current live bankroll
     if bankroll is None:
         bankroll = settings.INITIAL_BANKROLL
         _db = None
@@ -201,7 +223,7 @@ async def generate_weather_signal(
             if _db is not None:
                 _db.close()
 
-    # Clamp effective edge at 25% for Kelly sizing (data science audit: 8-12% edge Brier=0.1795; >35% overconfident)
+    # Clamp effective edge at 25% for Kelly sizing
     effective_edge = min(abs(edge), 0.25)
     suggested_size = calculate_kelly_size(
         edge=effective_edge,
@@ -210,6 +232,7 @@ async def generate_weather_signal(
         direction=direction_raw,  # calculate_kelly_size expects "up"/"down"
         bankroll=bankroll,
         actual_entry_price=entry_price,
+        fee_per_contract=entry_fee,
     ) if edge > 0 else 0.0
     suggested_size = min(suggested_size, settings.WEATHER_MAX_TRADE_SIZE)
 
@@ -233,10 +256,19 @@ async def generate_weather_signal(
     else:
         strike_label = f"{market.threshold_f:.0f}F"
 
+    anchor_parts = []
+    if getattr(forecast, "nbm_high", None) is not None:
+        anchor_parts.append(f"NBM:{forecast.nbm_high:.1f}F")
+    if getattr(forecast, "nws_high", None) is not None:
+        anchor_parts.append(f"NWS:{forecast.nws_high:.0f}F")
+    if getattr(forecast, "anchor_high", None) is not None:
+        anchor_parts.append(f"shift:{forecast.bias_shift:+.1f}F")
+    anchor_str = f", {' '.join(anchor_parts)}" if anchor_parts else ""
+
     reasoning = (
         f"[{filter_status}]{filter_note} "
         f"{market.city_name} {market.metric} {market.direction} {strike_label} on {market.target_date} ({season.upper()}) | "
-        f"Ensemble: {mean_val:.1f}F +/- {std_val:.1f}F ({forecast.num_members}m, Clim: {clim_norm:.1f}F {clim_anomaly:+.1f}F) | "
+        f"Ensemble: {mean_val:.1f}F +/- {std_val:.1f}F ({forecast.num_members}m, Clim: {clim_norm:.1f}F {clim_anomaly:+.1f}F{anchor_str}) | "
         f"Model YES: {model_yes_prob:.0%} vs Market: {market_yes_prob:.0%} | "
         f"Edge: {edge:+.1%} -> {direction.upper()} @ {entry_price:.0%} | "
         f"Agreement: {agreement_frac:.0%}"
